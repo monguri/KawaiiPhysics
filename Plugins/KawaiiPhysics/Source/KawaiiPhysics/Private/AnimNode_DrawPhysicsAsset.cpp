@@ -11,7 +11,7 @@ void FAnimNode_DrawPhysicsAsset::OnInitializeAnimInstance(const FAnimInstancePro
 	const USkeletalMesh* SkeletalMeshAsset = SkeletalMeshComp->SkeletalMesh;
 
 	const FReferenceSkeleton& SkelMeshRefSkel = SkeletalMeshAsset->RefSkeleton;
-	UsePhysicsAsset = OverridePhysicsAsset ? OverridePhysicsAsset : InAnimInstance->GetSkelMeshComponent()->GetPhysicsAsset();
+	UsePhysicsAsset = OverridePhysicsAsset ? OverridePhysicsAsset : SkeletalMeshComp->GetPhysicsAsset();
 }
 
 bool FAnimNode_DrawPhysicsAsset::IsValidToEvaluate(const class USkeleton* Skeleton, const struct FBoneContainer& RequiredBones)
