@@ -29,6 +29,7 @@ protected:
 	// End of FAnimNode_SkeletalControlBase interface
 
 private:
+	UPROPERTY(Transient)
 	UPhysicsAsset* UsePhysicsAsset = nullptr;
 };
 
