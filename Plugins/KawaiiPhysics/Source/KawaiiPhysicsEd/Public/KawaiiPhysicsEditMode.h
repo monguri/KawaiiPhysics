@@ -49,6 +49,7 @@ private:
 	void RenderSphericalLimits(FPrimitiveDrawInterface* PDI);
 	void RenderCapsuleLimit(FPrimitiveDrawInterface* PDI);
 	void RenderPlanerLimit(FPrimitiveDrawInterface* PDI);
+	void RenderPhysicsAssetAsLimit(FPrimitiveDrawInterface* PDI, const USkeletalMeshComponent* SkeletalMeshComp);
 
 	/** Helper funciton for GetWidgetLocation() and joint rendering */
 	FVector GetWidgetLocation(ECollisionLimitType CollisionType, int Index) const;

@@ -12,6 +12,8 @@
 #include "BoneControllers/AnimNode_SkeletalControlBase.h"
 //#include "KawaiiPhysicsLimitsDataAsset.h"
 
+#include "PhysicsEngine/PhysicsAsset.h"
+
 class UKawaiiPhysicsLimitsDataAsset;
 
 #include "AnimNode_KawaiiPhysics.generated.h"
@@ -290,6 +292,13 @@ public:
 	UPROPERTY(VisibleAnywhere, AdvancedDisplay, Category = "Limits Data(Experimental)")
 	TArray< FPlanarLimit> PlanarLimitsData;
 
+	/** Use physics asset as limits setting or not. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = PhysicsAsset, meta = (PinHiddenByDefault))
+	bool bUsePhysicsAssetAsLimits = false;
+
+	/** Physics asset to use for limits. If empty use the skeletal mesh's default physics asset */
+	UPROPERTY(EditAnywhere, Category = PhysicsAsset, meta = (EditCondition = "bUsePhysicsAssetAsLimits"))
+	UPhysicsAsset* OverridePhysicsAssetAsLimits = nullptr;
 
 	/** If the movement amount of one frame exceeds the threshold, ignore the movement  */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Teleport", meta = (PinHiddenByDefault))
@@ -312,6 +321,8 @@ public:
 
 	UPROPERTY()
 	TArray< FKawaiiPhysicsModifyBone > ModifyBones;
+	UPROPERTY(Transient)
+	UPhysicsAsset* UsePhysicsAssetAsLimits = nullptr;
 
 private:
 	UPROPERTY()
@@ -394,6 +405,7 @@ private:
 	void AdjustBySphereCollision(FKawaiiPhysicsModifyBone& Bone, TArray<FSphericalLimit>& Limits);
 	void AdjustByCapsuleCollision(FKawaiiPhysicsModifyBone& Bone, TArray<FCapsuleLimit>& Limits);
 	void AdjustByPlanerCollision(FKawaiiPhysicsModifyBone& Bone, TArray<FPlanarLimit>& Limits);
+	void AdjustByPhysicsAssetCollision(const USkeletalMeshComponent* SkelMeshComp, FKawaiiPhysicsModifyBone& Bone);
 	void AdjustByAngleLimit(FComponentSpacePoseContext& Output, const FBoneContainer& BoneContainer, FTransform& ComponentTransform, FKawaiiPhysicsModifyBone& Bone, FKawaiiPhysicsModifyBone& ParentBone);
 	void AdjustByPlanarConstraint(FKawaiiPhysicsModifyBone& Bone, FKawaiiPhysicsModifyBone& ParentBone);
 	

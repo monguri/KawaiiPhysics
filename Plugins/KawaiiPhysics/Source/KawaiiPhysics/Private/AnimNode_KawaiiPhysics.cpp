@@ -23,6 +23,15 @@ void FAnimNode_KawaiiPhysics::Initialize_AnyThread(const FAnimationInitializeCon
 
 	ApplyLimitsDataAsset(RequiredBones);
 
+	if (bUsePhysicsAssetAsLimits)
+	{
+		const USkeletalMeshComponent* SkeletalMeshComp = Context.AnimInstanceProxy->GetSkelMeshComponent();
+		const USkeletalMesh* SkeletalMeshAsset = SkeletalMeshComp->SkeletalMesh;
+
+		const FReferenceSkeleton& SkelMeshRefSkel = SkeletalMeshAsset->RefSkeleton;
+		UsePhysicsAssetAsLimits = OverridePhysicsAssetAsLimits ? OverridePhysicsAssetAsLimits : SkeletalMeshComp->GetPhysicsAsset();
+	}
+
 	InitializeBoneReferences(RequiredBones);
 
 	ModifyBones.Empty();
@@ -69,6 +78,14 @@ void FAnimNode_KawaiiPhysics::EvaluateSkeletalControl_AnyThread(FComponentSpaceP
 	if (LimitsDataAsset)
 	{ 
 		ApplyLimitsDataAsset(BoneContainer);
+	}
+	if (bUsePhysicsAssetAsLimits)
+	{
+		const USkeletalMeshComponent* SkeletalMeshComp = Output.AnimInstanceProxy->GetSkelMeshComponent();
+		const USkeletalMesh* SkeletalMeshAsset = SkeletalMeshComp->SkeletalMesh;
+
+		const FReferenceSkeleton& SkelMeshRefSkel = SkeletalMeshAsset->RefSkeleton;
+		UsePhysicsAssetAsLimits = OverridePhysicsAssetAsLimits ? OverridePhysicsAssetAsLimits : SkeletalMeshComp->GetPhysicsAsset();
 	}
 #endif
 
@@ -578,6 +595,7 @@ void FAnimNode_KawaiiPhysics::SimulateModifyBones(FComponentSpacePoseContext& Ou
 			AdjustByCapsuleCollision(Bone, CapsuleLimitsData);
 			AdjustByPlanerCollision(Bone, PlanarLimits);
 			AdjustByPlanerCollision(Bone, PlanarLimitsData);
+			AdjustByPhysicsAssetCollision(SkelComp, Bone);
 
 			// Adjust by angle limit
 			AdjustByAngleLimit(Output, BoneContainer, ComponentTransform, Bone, ParentBone);
@@ -671,6 +689,75 @@ void FAnimNode_KawaiiPhysics::AdjustByPlanerCollision(FKawaiiPhysicsModifyBone& 
 		{
 			Bone.Location = PointOnPlane + Planar.Rotation.GetUpVector() * Bone.PhysicsSettings.Radius;
 			continue;;
+		}
+	}
+}
+
+void FAnimNode_KawaiiPhysics::AdjustByPhysicsAssetCollision(const USkeletalMeshComponent* SkeletalMeshComp, FKawaiiPhysicsModifyBone& Bone)
+{
+	if (!bUsePhysicsAssetAsLimits || UsePhysicsAssetAsLimits == nullptr)
+	{
+		return;
+	}
+
+	UWorld* World = GEngine->GetWorldFromContextObject(SkeletalMeshComp, EGetWorldErrorMode::LogAndReturnNull);
+
+	// UPhysicsAssetEditorSkeletalMeshComponent::GetPrimitiveColor()のElemSelectedColorの色をデバッガで値を調べた
+	const FColor ElemSelectedColor = FColor(222, 163, 9);
+
+	// UPhysicsAssetEditorSkeletalMeshComponent::RenderAssetTools()を参考にしている
+
+	for (int32 i = 0; i <UsePhysicsAssetAsLimits->SkeletalBodySetups.Num(); ++i)
+	{
+		if (!ensure(UsePhysicsAssetAsLimits->SkeletalBodySetups[i]))
+		{
+			continue;
+		}
+		int32 BoneIndex = SkeletalMeshComp->GetBoneIndex(UsePhysicsAssetAsLimits->SkeletalBodySetups[i]->BoneName);
+
+		if (BoneIndex != INDEX_NONE)
+		{
+			FTransform BoneTM = SkeletalMeshComp->GetBoneTransform(BoneIndex, FTransform::Identity); // コンポーネント座標でのTransform
+			float Scale = BoneTM.GetScale3D().GetAbsMax();
+			FVector VectorScale(Scale);
+			BoneTM.RemoveScaling();
+
+			FKAggregateGeom* AggGeom = &UsePhysicsAssetAsLimits->SkeletalBodySetups[i]->AggGeom;
+
+			for (int32 j = 0; j <AggGeom->SphereElems.Num(); ++j)
+			{
+				FTransform ElemTM = AggGeom->SphereElems[j].GetTransform();
+				ElemTM.ScaleTranslation(VectorScale);
+				ElemTM *= BoneTM;
+			}
+
+			for (int32 j = 0; j <AggGeom->BoxElems.Num(); ++j)
+			{
+				FTransform ElemTM = AggGeom->BoxElems[j].GetTransform();
+				ElemTM.ScaleTranslation(VectorScale);
+				ElemTM *= BoneTM;
+			}
+
+			for (int32 j = 0; j <AggGeom->SphylElems.Num(); ++j)
+			{
+				FTransform ElemTM = AggGeom->SphylElems[j].GetTransform();
+				ElemTM.ScaleTranslation(VectorScale);
+				ElemTM *= BoneTM;
+			}
+
+			for (int32 j = 0; j <AggGeom->ConvexElems.Num(); ++j)
+			{
+				FTransform ElemTM = AggGeom->ConvexElems[j].GetTransform();
+				ElemTM.ScaleTranslation(VectorScale);
+				ElemTM *= BoneTM;
+			}
+
+			for (int32 j = 0; j <AggGeom->TaperedCapsuleElems.Num(); ++j)
+			{
+				FTransform ElemTM = AggGeom->TaperedCapsuleElems[j].GetTransform();
+				ElemTM.ScaleTranslation(VectorScale);
+				ElemTM *= BoneTM;
+			}
 		}
 	}
 }
