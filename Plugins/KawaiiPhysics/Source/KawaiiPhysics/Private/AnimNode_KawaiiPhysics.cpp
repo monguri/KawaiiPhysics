@@ -198,8 +198,34 @@ void FAnimNode_KawaiiPhysics::InitModifyBones(FComponentSpacePoseContext& Output
 	{
 		CalcBoneLength(ModifyBones[0], BoneContainer.GetRefPoseCompactArray());
 	}
+
+	if (PhysicsAssetAsShapes != nullptr)
+	{
+		InitModifyBonesPhysicsBodiesSetup(Output, BoneContainer);
+	}
 }
 
+void FAnimNode_KawaiiPhysics::InitModifyBonesPhysicsBodiesSetup(FComponentSpacePoseContext& Output, const FBoneContainer& BoneContainer)
+{
+	check(PhysicsAssetAsShapes != nullptr);
+
+	for (FKawaiiPhysicsModifyBone& ModifyBone : ModifyBones)
+	{
+		for (int32 i = 0; i < PhysicsAssetAsShapes->SkeletalBodySetups.Num(); ++i)
+		{
+			if (!ensure(PhysicsAssetAsShapes->SkeletalBodySetups[i]))
+			{
+				continue;
+			}
+
+			if (PhysicsAssetAsShapes->SkeletalBodySetups[i]->BoneName == ModifyBone.BoneRef.BoneName)
+			{
+				ModifyBone.PhysicsBodySetup = PhysicsAssetAsShapes->SkeletalBodySetups[i];
+				break; // SkeletalBodySetupsの中で骨が一致するものはひとつしかない前提
+			}
+		}
+	}
+}
 
 void FAnimNode_KawaiiPhysics::ApplyLimitsDataAsset(const FBoneContainer& RequiredBones)
 {
@@ -585,16 +611,39 @@ void FAnimNode_KawaiiPhysics::SimulateModifyBones(FComponentSpacePoseContext& Ou
 		Bone.Location += (BaseLocation - Bone.Location) *
 			(1.0f - FMath::Pow(1.0f - Bone.PhysicsSettings.Stiffness, Exponent));
 
+		// Calculate Rotation before adjusting collision
+		Bone.Rotation = Bone.PoseRotation;
+		if (i > 0)
+		{
+			if (ParentBone.BoneRef.BoneIndex >= 0)
+			{
+				FVector PoseVector = Bone.PoseLocation - ParentBone.PoseLocation;
+				FVector SimulateVector = Bone.Location - ParentBone.Location;
+
+				if (PoseVector.GetSafeNormal() != SimulateVector.GetSafeNormal())
+				{
+					if (BoneForwardAxis == EBoneForwardAxis::X_Negative || BoneForwardAxis == EBoneForwardAxis::Y_Negative || BoneForwardAxis == EBoneForwardAxis::Z_Negative)
+					{
+						PoseVector *= -1;
+						SimulateVector *= -1;
+					}
+
+					FQuat SimulateRotation = FQuat::FindBetweenVectors(PoseVector, SimulateVector) * ParentBone.PoseRotation;
+					Bone.Rotation = SimulateRotation;
+				}
+			}
+		}
+
 		{
 			SCOPE_CYCLE_COUNTER(STAT_KawaiiPhysics_AdjustBone);
 
 			// Adjust by each collisions
-			AdjustBySphereCollision(Bone, SphericalLimits);
-			AdjustBySphereCollision(Bone, SphericalLimitsData);
-			AdjustByCapsuleCollision(Bone, CapsuleLimits);
-			AdjustByCapsuleCollision(Bone, CapsuleLimitsData);
-			AdjustByPlanerCollision(Bone, PlanarLimits);
-			AdjustByPlanerCollision(Bone, PlanarLimitsData);
+			AdjustBySphereCollision(SkelComp, Bone, SphericalLimits);
+			AdjustBySphereCollision(SkelComp, Bone, SphericalLimitsData);
+			AdjustByCapsuleCollision(SkelComp, Bone, CapsuleLimits);
+			AdjustByCapsuleCollision(SkelComp, Bone, CapsuleLimitsData);
+			AdjustByPlanerCollision(SkelComp, Bone, PlanarLimits);
+			AdjustByPlanerCollision(SkelComp, Bone, PlanarLimitsData);
 			AdjustByPhysicsAssetCollision(SkelComp, Bone);
 
 			// Adjust by angle limit
@@ -611,50 +660,166 @@ void FAnimNode_KawaiiPhysics::SimulateModifyBones(FComponentSpacePoseContext& Ou
 	DeltaTimeOld = DeltaTime;
 }
 
-void FAnimNode_KawaiiPhysics::AdjustBySphereCollision(FKawaiiPhysicsModifyBone& Bone, TArray<FSphericalLimit>& Limits)
+void FAnimNode_KawaiiPhysics::AdjustBySphereCollision(const USkeletalMeshComponent* SkeletalMeshComp, FKawaiiPhysicsModifyBone& Bone, TArray<FSphericalLimit>& Limits)
 {
-	for (auto& Sphere : Limits)
+	if (Bone.PhysicsBodySetup == nullptr)
 	{
-		if (Sphere.Radius <= 0.0f)
+		for (auto& Sphere : Limits)
 		{
-			continue;
-		}
+			if (Sphere.Radius <= 0.0f)
+			{
+				continue;
+			}
 
-		float LimitDistance = Bone.PhysicsSettings.Radius + Sphere.Radius;
-		if (Sphere.LimitType == ESphericalLimitType::Outer)
-		{
-			if ((Bone.Location - Sphere.Location).SizeSquared() > LimitDistance * LimitDistance)
+			float LimitDistance = Bone.PhysicsSettings.Radius + Sphere.Radius;
+			if (Sphere.LimitType == ESphericalLimitType::Outer)
 			{
-				continue;
-			}
-			else
-			{
-				Bone.Location += (LimitDistance - (Bone.Location - Sphere.Location).Size())
-					* (Bone.Location - Sphere.Location).GetSafeNormal();
-			}
-		}
-		else
-		{
-			if ((Bone.Location - Sphere.Location).SizeSquared() < LimitDistance * LimitDistance)
-			{
-				continue;
-			}
-			else
-			{
-				if (CVarEnableOldPhysicsMethodSphereLimit.GetValueOnAnyThread() == 0)
+				if ((Bone.Location - Sphere.Location).SizeSquared() > LimitDistance * LimitDistance)
 				{
-					Bone.Location = Sphere.Location + (Sphere.Radius - Bone.PhysicsSettings.Radius) * (Bone.Location - Sphere.Location).GetSafeNormal();
+					continue;
 				}
 				else
 				{
-					Bone.Location = Sphere.Location + Sphere.Radius * (Bone.Location - Sphere.Location).GetSafeNormal();
+					Bone.Location += (LimitDistance - (Bone.Location - Sphere.Location).Size())
+						* (Bone.Location - Sphere.Location).GetSafeNormal();
+				}
+			}
+			else
+			{
+				if ((Bone.Location - Sphere.Location).SizeSquared() < LimitDistance * LimitDistance)
+				{
+					continue;
+				}
+				else
+				{
+					if (CVarEnableOldPhysicsMethodSphereLimit.GetValueOnAnyThread() == 0)
+					{
+						Bone.Location = Sphere.Location + (Sphere.Radius - Bone.PhysicsSettings.Radius) * (Bone.Location - Sphere.Location).GetSafeNormal();
+					}
+					else
+					{
+						Bone.Location = Sphere.Location + Sphere.Radius * (Bone.Location - Sphere.Location).GetSafeNormal();
+					}
 				}
 			}
 		}
 	}
+	else
+	{
+		check(Bone.BoneRef.BoneIndex != INDEX_NONE);
+		float Scale = SkeletalMeshComp->GetBoneTransform(Bone.BoneRef.BoneIndex, FTransform::Identity).GetScale3D().GetAbsMax(); // コンポーネント座標でのTransformのスケール
+		FVector VectorScale(Scale);
+
+		FTransform BoneTM = FTransform(Bone.Rotation, Bone.Location);
+
+		FKAggregateGeom* AggGeom = &Bone.PhysicsBodySetup->AggGeom;
+
+		for (int32 j = 0; j <AggGeom->SphereElems.Num(); ++j)
+		{
+			const FKSphereElem& SphereBody = AggGeom->SphereElems[j];
+
+			// FAnimNode_KawaiiPhysics::AdjustBySphereCollision()のESphericalLimitType::Outerのケースを参考にしている
+			if (SphereBody.Radius <= 0.0f)
+			{
+				continue;
+			}
+
+			FTransform ElemTM = SphereBody.GetTransform();
+			ElemTM.ScaleTranslation(VectorScale);
+			ElemTM *= BoneTM;
+
+			FVector SphereBodyLocation = ElemTM.GetLocation();
+
+			for (auto& Sphere : Limits)
+			{
+				if (Sphere.Radius <= 0.0f)
+				{
+					continue;
+				}
+
+				FVector PushOutVector = FVector::ZeroVector;
+
+				float LimitDistance = Bone.PhysicsSettings.Radius + Sphere.Radius;
+				if (Sphere.LimitType == ESphericalLimitType::Outer)
+				{
+					if ((SphereBodyLocation - Sphere.Location).SizeSquared() > LimitDistance * LimitDistance)
+					{
+						continue;
+					}
+					else
+					{
+						PushOutVector = (LimitDistance - (SphereBodyLocation - Sphere.Location).Size())
+							* (SphereBodyLocation - Sphere.Location).GetSafeNormal();
+					}
+				}
+				else
+				{
+					if ((SphereBodyLocation - Sphere.Location).SizeSquared() < LimitDistance * LimitDistance)
+					{
+						continue;
+					}
+					else
+					{
+						if (CVarEnableOldPhysicsMethodSphereLimit.GetValueOnAnyThread() == 0)
+						{
+							PushOutVector = Sphere.Location + (Sphere.Radius - Bone.PhysicsSettings.Radius) * (SphereBodyLocation - Sphere.Location).GetSafeNormal() - SphereBodyLocation;
+						}
+						else
+						{
+							PushOutVector = Sphere.Location + Sphere.Radius * (SphereBodyLocation - Sphere.Location).GetSafeNormal() - SphereBodyLocation;
+						}
+					}
+				}
+
+				SphereBodyLocation += PushOutVector;
+				// SphereBodyが押し出されたベクトルだけボーンも移動させるという単純な計算
+				// TODO:SphereBodyが骨に対してひとつだけならまだいいが、複数になってくると問題も大きい
+				Bone.Location += PushOutVector;
+			}
+		}
+
+		for (int32 j = 0; j <AggGeom->BoxElems.Num(); ++j)
+		{
+			FTransform ElemTM = AggGeom->BoxElems[j].GetTransform();
+			ElemTM.ScaleTranslation(VectorScale);
+			ElemTM *= BoneTM;
+			// TODO:
+		}
+
+		for (int32 j = 0; j <AggGeom->SphylElems.Num(); ++j)
+		{
+			const FKSphylElem& Capsule = AggGeom->SphylElems[j];
+
+			if (Capsule.Radius <= 0 || Capsule.Length <= 0)
+			{
+				continue;
+			}
+
+			FTransform ElemTM = Capsule.GetTransform();
+			ElemTM.ScaleTranslation(VectorScale);
+			ElemTM *= BoneTM;
+			// TODO:
+		}
+
+		for (int32 j = 0; j <AggGeom->ConvexElems.Num(); ++j)
+		{
+			FTransform ElemTM = AggGeom->ConvexElems[j].GetTransform();
+			ElemTM.ScaleTranslation(VectorScale);
+			ElemTM *= BoneTM;
+			// TODO:
+		}
+
+		for (int32 j = 0; j <AggGeom->TaperedCapsuleElems.Num(); ++j)
+		{
+			FTransform ElemTM = AggGeom->TaperedCapsuleElems[j].GetTransform();
+			ElemTM.ScaleTranslation(VectorScale);
+			ElemTM *= BoneTM;
+			// TODO:
+		}
+	}
 }
 
-void FAnimNode_KawaiiPhysics::AdjustByCapsuleCollision(FKawaiiPhysicsModifyBone& Bone, TArray<FCapsuleLimit>& Limits)
+void FAnimNode_KawaiiPhysics::AdjustByCapsuleCollision(const USkeletalMeshComponent* SkeletalMeshComp, FKawaiiPhysicsModifyBone& Bone, TArray<FCapsuleLimit>& Limits)
 {
 	for (auto& Capsule : Limits)
 	{
@@ -676,7 +841,7 @@ void FAnimNode_KawaiiPhysics::AdjustByCapsuleCollision(FKawaiiPhysicsModifyBone&
 	}
 }
 
-void FAnimNode_KawaiiPhysics::AdjustByPlanerCollision(FKawaiiPhysicsModifyBone& Bone, TArray<FPlanarLimit>& Limits)
+void FAnimNode_KawaiiPhysics::AdjustByPlanerCollision(const USkeletalMeshComponent* SkeletalMeshComp, FKawaiiPhysicsModifyBone& Bone, TArray<FPlanarLimit>& Limits)
 {
 	for (auto& Planar : Limits)
 	{
@@ -728,15 +893,15 @@ void FAnimNode_KawaiiPhysics::AdjustByPhysicsAssetCollision(const USkeletalMeshC
 			{
 				const FKSphereElem& Sphere = AggGeom->SphereElems[j];
 
-				FTransform ElemTM = Sphere.GetTransform();
-				ElemTM.ScaleTranslation(VectorScale);
-				ElemTM *= BoneTM;
-
 				// FAnimNode_KawaiiPhysics::AdjustBySphereCollision()のESphericalLimitType::Outerのケースを参考にしている
 				if (Sphere.Radius <= 0.0f)
 				{
 					continue;
 				}
+
+				FTransform ElemTM = Sphere.GetTransform();
+				ElemTM.ScaleTranslation(VectorScale);
+				ElemTM *= BoneTM;
 
 				const FVector& SphereLocation = ElemTM.GetLocation();
 				float LimitDistance = Bone.PhysicsSettings.Radius + Sphere.Radius;
@@ -763,14 +928,14 @@ void FAnimNode_KawaiiPhysics::AdjustByPhysicsAssetCollision(const USkeletalMeshC
 			{
 				const FKSphylElem& Capsule = AggGeom->SphylElems[j];
 
-				FTransform ElemTM = Capsule.GetTransform();
-				ElemTM.ScaleTranslation(VectorScale);
-				ElemTM *= BoneTM;
-
 				if (Capsule.Radius <= 0 || Capsule.Length <= 0)
 				{
 					continue;
 				}
+
+				FTransform ElemTM = Capsule.GetTransform();
+				ElemTM.ScaleTranslation(VectorScale);
+				ElemTM *= BoneTM;
 
 				const FVector& CapsuleLocation = ElemTM.GetLocation();
 				FVector StartPoint = CapsuleLocation + ElemTM.GetUnitAxis(EAxis::Type::Z) * Capsule.Length * 0.5f;

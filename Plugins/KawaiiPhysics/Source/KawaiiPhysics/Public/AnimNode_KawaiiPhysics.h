@@ -182,6 +182,8 @@ public:
 	UPROPERTY()
 	FVector PrevLocation;
 	UPROPERTY()
+	FQuat Rotation;
+	UPROPERTY()
 	FQuat PrevRotation;
 	UPROPERTY()
 	FVector PoseLocation;
@@ -193,7 +195,8 @@ public:
 	float LengthFromRoot;
 	UPROPERTY()
 	bool bDummy = false;
-
+	UPROPERTY(Transient)
+	USkeletalBodySetup* PhysicsBodySetup = nullptr;
 
 public:
 
@@ -292,6 +295,10 @@ public:
 	UPROPERTY(VisibleAnywhere, AdvancedDisplay, Category = "Limits Data(Experimental)")
 	TArray< FPlanarLimit> PlanarLimitsData;
 
+	/** Physics asset to use for bone shapes. If empty use the sphere as bone shapes */
+	UPROPERTY(EditAnywhere, Category = PhysicsAsset, meta = (EditCondition = "bUsePhysicsAssetAsLimits"))
+	UPhysicsAsset* PhysicsAssetAsShapes = nullptr;
+
 	/** Use physics asset as limits setting or not. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = PhysicsAsset, meta = (PinHiddenByDefault))
 	bool bUsePhysicsAssetAsLimits = false;
@@ -321,6 +328,7 @@ public:
 
 	UPROPERTY()
 	TArray< FKawaiiPhysicsModifyBone > ModifyBones;
+
 	UPROPERTY(Transient)
 	UPhysicsAsset* UsePhysicsAssetAsLimits = nullptr;
 
@@ -359,6 +367,7 @@ public:
 
 	// 
 	void InitModifyBones(FComponentSpacePoseContext& Output, const FBoneContainer& BoneContainer);
+	void InitModifyBonesPhysicsBodiesSetup(FComponentSpacePoseContext& Output, const FBoneContainer& BoneContainer);
 	float GetTotalBoneLength() 
 	{
 		return TotalBoneLength;
@@ -402,9 +411,9 @@ private:
 	void UpdatePlanerLimits(TArray<FPlanarLimit>& Limits, FComponentSpacePoseContext& Output, const FBoneContainer& BoneContainer, FTransform& ComponentTransform);
 
 	void SimulateModifyBones(FComponentSpacePoseContext& Output, const FBoneContainer& BoneContainer, FTransform& ComponentTransform);
-	void AdjustBySphereCollision(FKawaiiPhysicsModifyBone& Bone, TArray<FSphericalLimit>& Limits);
-	void AdjustByCapsuleCollision(FKawaiiPhysicsModifyBone& Bone, TArray<FCapsuleLimit>& Limits);
-	void AdjustByPlanerCollision(FKawaiiPhysicsModifyBone& Bone, TArray<FPlanarLimit>& Limits);
+	void AdjustBySphereCollision(const USkeletalMeshComponent* SkelMeshComp, FKawaiiPhysicsModifyBone& Bone, TArray<FSphericalLimit>& Limits);
+	void AdjustByCapsuleCollision(const USkeletalMeshComponent* SkelMeshComp, FKawaiiPhysicsModifyBone& Bone, TArray<FCapsuleLimit>& Limits);
+	void AdjustByPlanerCollision(const USkeletalMeshComponent* SkelMeshComp, FKawaiiPhysicsModifyBone& Bone, TArray<FPlanarLimit>& Limits);
 	void AdjustByPhysicsAssetCollision(const USkeletalMeshComponent* SkelMeshComp, FKawaiiPhysicsModifyBone& Bone);
 	void AdjustByAngleLimit(FComponentSpacePoseContext& Output, const FBoneContainer& BoneContainer, FTransform& ComponentTransform, FKawaiiPhysicsModifyBone& Bone, FKawaiiPhysicsModifyBone& ParentBone);
 	void AdjustByPlanarConstraint(FKawaiiPhysicsModifyBone& Bone, FKawaiiPhysicsModifyBone& ParentBone);
