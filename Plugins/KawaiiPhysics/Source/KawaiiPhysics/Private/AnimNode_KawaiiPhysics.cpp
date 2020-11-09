@@ -662,7 +662,7 @@ void FAnimNode_KawaiiPhysics::SimulateModifyBones(FComponentSpacePoseContext& Ou
 
 void FAnimNode_KawaiiPhysics::AdjustBySphereCollision(const USkeletalMeshComponent* SkeletalMeshComp, FKawaiiPhysicsModifyBone& Bone, TArray<FSphericalLimit>& Limits)
 {
-	if (Bone.PhysicsBodySetup == nullptr)
+	if (!bUsePhysicsAssetAsShapes)
 	{
 		for (auto& Sphere : Limits)
 		{
@@ -704,9 +704,8 @@ void FAnimNode_KawaiiPhysics::AdjustBySphereCollision(const USkeletalMeshCompone
 			}
 		}
 	}
-	else
+	else if (Bone.PhysicsBodySetup != nullptr)
 	{
-		check(bUsePhysicsAssetAsShapes);
 		check(Bone.BoneRef.BoneIndex != INDEX_NONE);
 		float Scale = SkeletalMeshComp->GetBoneTransform(Bone.BoneRef.BoneIndex, FTransform::Identity).GetScale3D().GetAbsMax(); // コンポーネント座標でのTransformのスケール
 		FVector VectorScale(Scale);
