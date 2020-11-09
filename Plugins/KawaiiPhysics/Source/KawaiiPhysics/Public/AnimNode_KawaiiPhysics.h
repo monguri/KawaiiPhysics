@@ -295,12 +295,16 @@ public:
 	UPROPERTY(VisibleAnywhere, AdvancedDisplay, Category = "Limits Data(Experimental)")
 	TArray< FPlanarLimit> PlanarLimitsData;
 
-	/** Physics asset to use for bone shapes. If empty use the sphere as bone shapes */
-	UPROPERTY(EditAnywhere, Category = PhysicsAsset)
+	/** Use physics asset as bone shapes or sphere defined by Radius. */
+	UPROPERTY(EditAnywhere, Category = PhysicsAsset, meta = (PinHiddenByDefault))
+	bool bUsePhysicsAssetAsShapes = false;
+
+	/** Physics asset to use for bone shapes. */
+	UPROPERTY(EditAnywhere, Category = PhysicsAsset, meta = (EditCondition = "bUsePhysicsAssetAsShapes"))
 	UPhysicsAsset* PhysicsAssetAsShapes = nullptr;
 
 	/** Use physics asset as limits setting or not. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = PhysicsAsset, meta = (PinHiddenByDefault))
+	UPROPERTY(EditAnywhere, Category = PhysicsAsset, meta = (PinHiddenByDefault))
 	bool bUsePhysicsAssetAsLimits = false;
 
 	/** Physics asset to use for limits. If empty use the skeletal mesh's default physics asset */
