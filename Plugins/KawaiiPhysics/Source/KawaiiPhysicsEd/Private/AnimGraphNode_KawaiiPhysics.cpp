@@ -76,7 +76,7 @@ void UAnimGraphNode_KawaiiPhysics::Draw(FPrimitiveDrawInterface* PDI, USkeletalM
 		{
 			PDI->DrawPoint(Bone.Location, FLinearColor::White, 5.0f, SDPG_Foreground);
 
-			if (Bone.PhysicsSettings.Radius > 0)
+			if (Bone.PhysicsSettings.Radius > 0 && !Node.bUsePhysicsAssetAsShapes)
 			{
 				auto Color = Bone.bDummy ? FColor::Red : FColor::Yellow;
 				DrawWireSphere(PDI, Bone.Location, Color, Bone.PhysicsSettings.Radius, 16, SDPG_Foreground);

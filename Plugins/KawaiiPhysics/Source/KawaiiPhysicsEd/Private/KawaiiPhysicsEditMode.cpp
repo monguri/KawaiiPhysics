@@ -76,6 +76,7 @@ void FKawaiiPhysicsEditMode::Render(const FSceneView* View, FViewport* Viewport,
 		RenderSphericalLimits(PDI);
 		RenderCapsuleLimit(PDI);
 		RenderPlanerLimit(PDI);
+		RenderPhysicsAssetAsShape(PDI, SkelMeshComp);
 		RenderPhysicsAssetAsLimit(PDI, SkelMeshComp);
 		PDI->SetHitProxy(nullptr);
 
@@ -219,6 +220,88 @@ void FKawaiiPhysicsEditMode::RenderPlanerLimit(FPrimitiveDrawInterface* PDI)
 			PDI->SetHitProxy(new HKawaiiPhysicsHitProxy(ECollisionLimitType::Planar, i, true));
 			DrawPlane10x10(PDI, PlaneTransform.ToMatrixWithScale(), 200.0f, FVector2D(0.0f, 0.0f), FVector2D(1.0f, 1.0f), GEngine->ConstraintLimitMaterialZ->GetRenderProxy(), SDPG_World);
 			DrawDirectionalArrow(PDI, FRotationMatrix(FRotator(90.0f, 0.0f, 0.0f)) * PlaneTransform.ToMatrixWithScale(), FLinearColor::Blue, 50.0f, 20.0f, SDPG_Foreground, 0.5f);
+		}
+	}
+}
+
+void FKawaiiPhysicsEditMode::RenderPhysicsAssetAsShape(FPrimitiveDrawInterface* PDI, const USkeletalMeshComponent* SkeletalMeshComp)
+{
+	if (GraphNode->bEnableDebugDrawPhysicsAssetAsShape && RuntimeNode->bUsePhysicsAssetAsShapes && RuntimeNode->PhysicsAssetAsShapes != nullptr)
+	{
+		// UPhysicsAssetEditorSkeletalMeshComponent::GetPrimitiveColor()のElemSelectedColorの色をデバッガで値を調べた
+		const FColor ElemSelectedColor = FColor(222, 163, 9);
+
+		// UPhysicsAssetEditorSkeletalMeshComponent::RenderAssetTools()を参考にしている
+
+		// Draw bodies
+		for (int32 i = 0; i <RuntimeNode->PhysicsAssetAsShapes->SkeletalBodySetups.Num(); ++i)
+		{
+			if (!ensure(RuntimeNode->PhysicsAssetAsShapes->SkeletalBodySetups[i]))
+			{
+				continue;
+			}
+			int32 BoneIndex = SkeletalMeshComp->GetBoneIndex(RuntimeNode->PhysicsAssetAsShapes->SkeletalBodySetups[i]->BoneName);
+
+			// If we found a bone for it, draw the collision.
+			if (BoneIndex != INDEX_NONE)
+			{
+				FTransform BoneTM = SkeletalMeshComp->GetBoneTransform(BoneIndex, FTransform::Identity); // コンポーネント座標でのTransform
+				float Scale = BoneTM.GetScale3D().GetAbsMax();
+				FVector VectorScale(Scale);
+				BoneTM.RemoveScaling();
+
+				FKAggregateGeom* AggGeom = &RuntimeNode->PhysicsAssetAsShapes->SkeletalBodySetups[i]->AggGeom;
+
+				for (int32 j = 0; j <AggGeom->SphereElems.Num(); ++j)
+				{
+					FTransform ElemTM = AggGeom->SphereElems[j].GetTransform();
+					ElemTM.ScaleTranslation(VectorScale);
+					ElemTM *= BoneTM;
+
+					AggGeom->SphereElems[j].DrawElemSolid(PDI, ElemTM, VectorScale, GEngine->ConstraintLimitMaterialPrismatic->GetRenderProxy());
+					AggGeom->SphereElems[j].DrawElemWire(PDI, ElemTM, VectorScale, FColor::Black);
+				}
+
+				for (int32 j = 0; j <AggGeom->BoxElems.Num(); ++j)
+				{
+					FTransform ElemTM = AggGeom->BoxElems[j].GetTransform();
+					ElemTM.ScaleTranslation(VectorScale);
+					ElemTM *= BoneTM;
+
+					AggGeom->BoxElems[j].DrawElemSolid(PDI, ElemTM, VectorScale, GEngine->ConstraintLimitMaterialPrismatic->GetRenderProxy());
+					AggGeom->BoxElems[j].DrawElemWire(PDI, ElemTM, VectorScale, FColor::Black);
+				}
+
+				for (int32 j = 0; j <AggGeom->SphylElems.Num(); ++j)
+				{
+					FTransform ElemTM = AggGeom->SphylElems[j].GetTransform();
+					ElemTM.ScaleTranslation(VectorScale);
+					ElemTM *= BoneTM;
+
+					AggGeom->SphylElems[j].DrawElemSolid(PDI, ElemTM, VectorScale, GEngine->ConstraintLimitMaterialPrismatic->GetRenderProxy());
+					AggGeom->SphylElems[j].DrawElemWire(PDI, ElemTM, VectorScale, ElemSelectedColor);
+				}
+
+				for (int32 j = 0; j <AggGeom->ConvexElems.Num(); ++j)
+				{
+					FTransform ElemTM = AggGeom->ConvexElems[j].GetTransform();
+					ElemTM.ScaleTranslation(VectorScale);
+					ElemTM *= BoneTM;
+
+					//convex doesn't have solid draw so render lines if we're in hitTestAndBodyMode
+					AggGeom->ConvexElems[j].DrawElemWire(PDI, ElemTM, Scale, ElemSelectedColor);
+				}
+
+				for (int32 j = 0; j <AggGeom->TaperedCapsuleElems.Num(); ++j)
+				{
+					FTransform ElemTM = AggGeom->TaperedCapsuleElems[j].GetTransform();
+					ElemTM.ScaleTranslation(VectorScale);
+					ElemTM *= BoneTM;
+
+					AggGeom->TaperedCapsuleElems[j].DrawElemSolid(PDI, ElemTM, VectorScale, GEngine->ConstraintLimitMaterialPrismatic->GetRenderProxy());
+					AggGeom->TaperedCapsuleElems[j].DrawElemWire(PDI, ElemTM, VectorScale, ElemSelectedColor);
+				}
+			}
 		}
 	}
 }

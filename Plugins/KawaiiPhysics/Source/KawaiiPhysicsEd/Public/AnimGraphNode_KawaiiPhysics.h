@@ -30,6 +30,8 @@ class UAnimGraphNode_KawaiiPhysics : public UAnimGraphNode_SkeletalControlBase
 	UPROPERTY(EditAnywhere, Category = Debug)
 	bool bEnableDebugDrawPlanerLimit = true;
 	UPROPERTY(EditAnywhere, Category = Debug)
+	bool bEnableDebugDrawPhysicsAssetAsShape = true;
+	UPROPERTY(EditAnywhere, Category = Debug)
 	bool bEnableDebugDrawPhysicsAssetAsLimit = true;
 
 public:
