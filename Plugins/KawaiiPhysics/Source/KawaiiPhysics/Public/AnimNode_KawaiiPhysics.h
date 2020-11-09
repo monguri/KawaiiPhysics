@@ -296,7 +296,7 @@ public:
 	TArray< FPlanarLimit> PlanarLimitsData;
 
 	/** Physics asset to use for bone shapes. If empty use the sphere as bone shapes */
-	UPROPERTY(EditAnywhere, Category = PhysicsAsset, meta = (EditCondition = "bUsePhysicsAssetAsLimits"))
+	UPROPERTY(EditAnywhere, Category = PhysicsAsset)
 	UPhysicsAsset* PhysicsAssetAsShapes = nullptr;
 
 	/** Use physics asset as limits setting or not. */
