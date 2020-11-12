@@ -1156,17 +1156,24 @@ void FAnimNode_KawaiiPhysics::AdjustByPhysicsAssetCollision(const USkeletalMeshC
 						ElemTM.ScaleTranslation(VectorScale);
 						ElemTM *= BoneTM;
 
+						FVector PushOutVector = FVector::ZeroVector;
+
 						const FVector& CapsuleLocation = ElemTM.GetLocation();
 						FVector StartPoint = CapsuleLocation + ElemTM.GetUnitAxis(EAxis::Type::Z) * Capsule.Length * 0.5f;
 						FVector EndPoint = CapsuleLocation + ElemTM.GetUnitAxis(EAxis::Type::Z) * Capsule.Length * -0.5f;
-						float DistSquared = FMath::PointDistToSegmentSquared(Bone.Location, StartPoint, EndPoint);
+						float DistSquared = FMath::PointDistToSegmentSquared(SphereShapeLocation, StartPoint, EndPoint);
 
-						float LimitDistance = Bone.PhysicsSettings.Radius + Capsule.Radius;
+						float LimitDistance = SphereShape.Radius + Capsule.Radius;
 						if (DistSquared < LimitDistance* LimitDistance)
 						{
-							FVector ClosestPoint = FMath::ClosestPointOnSegment(Bone.Location, StartPoint, EndPoint);
-							Bone.Location = ClosestPoint + (Bone.Location - ClosestPoint).GetSafeNormal() * LimitDistance;
+							FVector ClosestPoint = FMath::ClosestPointOnSegment(SphereShapeLocation, StartPoint, EndPoint);
+							PushOutVector = ClosestPoint + (SphereShapeLocation - ClosestPoint).GetSafeNormal() * LimitDistance - SphereShapeLocation;
 						}
+
+						SphereShapeLocation += PushOutVector;
+						// SphereShapeが押し出されたベクトルだけボーンも移動させるという単純な計算
+						// TODO:SphereShapeが骨に対してひとつだけならまだいいが、複数になってくると問題も大きい
+						Bone.Location += PushOutVector;
 					}
 
 					for (int32 k = 0; k <AggGeom->ConvexElems.Num(); ++k)
