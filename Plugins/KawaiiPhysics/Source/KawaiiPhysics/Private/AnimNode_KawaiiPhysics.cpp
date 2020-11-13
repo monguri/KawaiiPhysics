@@ -938,17 +938,106 @@ void FAnimNode_KawaiiPhysics::AdjustByCapsuleCollision(const USkeletalMeshCompon
 
 void FAnimNode_KawaiiPhysics::AdjustByPlanerCollision(const USkeletalMeshComponent* SkeletalMeshComp, FKawaiiPhysicsModifyBone& Bone, TArray<FPlanarLimit>& Limits)
 {
-	for (auto& Planar : Limits)
+	if (!bUsePhysicsAssetAsShapes)
 	{
-		FVector PointOnPlane = FVector::PointPlaneProject(Bone.Location, Planar.Plane);
-		float DistSquared = (Bone.Location - PointOnPlane).SizeSquared();
-
-		FVector IntersectionPoint;
-		if (DistSquared < Bone.PhysicsSettings.Radius * Bone.PhysicsSettings.Radius ||
-			FMath::SegmentPlaneIntersection(Bone.Location, Bone.PrevLocation, Planar.Plane, IntersectionPoint))
+		for (auto& Planar : Limits)
 		{
-			Bone.Location = PointOnPlane + Planar.Rotation.GetUpVector() * Bone.PhysicsSettings.Radius;
-			continue;;
+			FVector PointOnPlane = FVector::PointPlaneProject(Bone.Location, Planar.Plane);
+			float DistSquared = (Bone.Location - PointOnPlane).SizeSquared();
+
+			FVector IntersectionPoint;
+			if (DistSquared < Bone.PhysicsSettings.Radius * Bone.PhysicsSettings.Radius ||
+				FMath::SegmentPlaneIntersection(Bone.Location, Bone.PrevLocation, Planar.Plane, IntersectionPoint))
+			{
+				Bone.Location = PointOnPlane + Planar.Rotation.GetUpVector() * Bone.PhysicsSettings.Radius;
+				continue;
+			}
+		}
+	}
+	else if (Bone.PhysicsBodySetup != nullptr)
+	{
+		check(Bone.BoneRef.BoneIndex != INDEX_NONE);
+		float Scale = SkeletalMeshComp->GetBoneTransform(Bone.BoneRef.BoneIndex, FTransform::Identity).GetScale3D().GetAbsMax(); // コンポーネント座標でのTransformのスケール
+		FVector VectorScale(Scale);
+
+		FTransform BoneTM = FTransform(Bone.Rotation, Bone.Location);
+
+		FKAggregateGeom* AggGeom = &Bone.PhysicsBodySetup->AggGeom;
+
+		for (int32 i = 0; i <AggGeom->SphereElems.Num(); ++i)
+		{
+			const FKSphereElem& SphereShape = AggGeom->SphereElems[i];
+
+			// FAnimNode_KawaiiPhysics::AdjustBySphereCollision()のESphericalLimitType::Outerのケースを参考にしている
+			if (SphereShape.Radius <= 0.0f)
+			{
+				continue;
+			}
+
+			FTransform ElemTM = SphereShape.GetTransform();
+			ElemTM.ScaleTranslation(VectorScale);
+			ElemTM *= BoneTM;
+
+			FVector SphereShapeLocation = ElemTM.GetLocation();
+
+			for (auto& Planar : Limits)
+			{
+				FVector PushOutVector = FVector::ZeroVector;
+
+				FVector PointOnPlane = FVector::PointPlaneProject(SphereShapeLocation, Planar.Plane);
+				float DistSquared = (SphereShapeLocation - PointOnPlane).SizeSquared();
+
+				FVector IntersectionPoint;
+				if (DistSquared < SphereShape.Radius * SphereShape.Radius ||
+					FMath::SegmentPlaneIntersection(SphereShapeLocation, Bone.PrevLocation, Planar.Plane, IntersectionPoint)) // TODO:貫通判定だが、スフィアシェイプの前フレームの位置は記録してないのでとりあえずボーンの前フレームの位置を使っておく
+				{
+					PushOutVector = PointOnPlane + Planar.Rotation.GetUpVector() * SphereShape.Radius - SphereShapeLocation;
+				}
+
+				SphereShapeLocation += PushOutVector;
+				// SphereShapeが押し出されたベクトルだけボーンも移動させるという単純な計算
+				// TODO:SphereShapeが骨に対してひとつだけならまだいいが、複数になってくると問題も大きい
+				Bone.Location += PushOutVector;
+			}
+		}
+
+		for (int32 i = 0; i <AggGeom->BoxElems.Num(); ++i)
+		{
+			FTransform ElemTM = AggGeom->BoxElems[i].GetTransform();
+			ElemTM.ScaleTranslation(VectorScale);
+			ElemTM *= BoneTM;
+			// TODO:
+		}
+
+		for (int32 i = 0; i <AggGeom->SphylElems.Num(); ++i)
+		{
+			const FKSphylElem& Capsule = AggGeom->SphylElems[i];
+
+			if (Capsule.Radius <= 0 || Capsule.Length <= 0)
+			{
+				continue;
+			}
+
+			FTransform ElemTM = Capsule.GetTransform();
+			ElemTM.ScaleTranslation(VectorScale);
+			ElemTM *= BoneTM;
+			// TODO:
+		}
+
+		for (int32 i = 0; i <AggGeom->ConvexElems.Num(); ++i)
+		{
+			FTransform ElemTM = AggGeom->ConvexElems[i].GetTransform();
+			ElemTM.ScaleTranslation(VectorScale);
+			ElemTM *= BoneTM;
+			// TODO:
+		}
+
+		for (int32 i = 0; i <AggGeom->TaperedCapsuleElems.Num(); ++i)
+		{
+			FTransform ElemTM = AggGeom->TaperedCapsuleElems[i].GetTransform();
+			ElemTM.ScaleTranslation(VectorScale);
+			ElemTM *= BoneTM;
+			// TODO:
 		}
 	}
 }
