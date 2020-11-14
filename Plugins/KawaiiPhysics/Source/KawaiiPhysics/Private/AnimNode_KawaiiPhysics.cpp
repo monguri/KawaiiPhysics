@@ -1511,7 +1511,34 @@ void FAnimNode_KawaiiPhysics::AdjustByPhysicsAssetCollision(const USkeletalMeshC
 						FTransform ElemTM = Capsule.GetTransform();
 						ElemTM.ScaleTranslation(VectorScale);
 						ElemTM *= BoneTM;
-						// TODO:
+						const FVector& CapsuleLocation = ElemTM.GetLocation();
+
+						FVector PushOutVector = FVector::ZeroVector;
+
+						FVector CapsuleShapeStartPoint = CapsuleShapeLocation + CapsuleShapeElemTM.GetRotation().GetAxisZ() * CapsuleShape.Length * 0.5f;
+						FVector CapsuleShapeEndPoint = CapsuleShapeLocation + CapsuleShapeElemTM.GetRotation().GetAxisZ() * CapsuleShape.Length * -0.5f;
+
+						FVector CapsuleStartPoint = CapsuleLocation + ElemTM.GetRotation().GetAxisZ() * Capsule.Length * 0.5f;
+						FVector CapsuleEndPoint = CapsuleLocation + ElemTM.GetRotation().GetAxisZ() * Capsule.Length * -0.5f;
+
+						FVector CapsuleShapeClosestPoint;
+						FVector CapsuleClosestPoint;
+						FMath::SegmentDistToSegmentSafe(CapsuleShapeStartPoint, CapsuleShapeEndPoint, CapsuleStartPoint, CapsuleEndPoint, CapsuleShapeClosestPoint, CapsuleClosestPoint);
+						float DistSquared = (CapsuleShapeClosestPoint - CapsuleClosestPoint).SizeSquared();
+
+						float LimitDistance = CapsuleShape.Radius + Capsule.Radius;
+						if (DistSquared < LimitDistance * LimitDistance)
+						{
+							PushOutVector = CapsuleClosestPoint + (CapsuleShapeClosestPoint - CapsuleClosestPoint).GetSafeNormal() * LimitDistance - CapsuleShapeClosestPoint;
+						}
+
+						CapsuleShapeLocation += PushOutVector;
+						// CapsuleShapeが押し出されたベクトルだけボーンも移動させるという単純な計算
+						if (ParentBone.ParentIndex >= 0)
+						{
+							ParentBone.Location += PushOutVector;
+						}
+						Bone.Location += PushOutVector;
 					}
 
 					for (int32 k = 0; k <AggGeom->ConvexElems.Num(); ++k)
