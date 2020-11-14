@@ -1222,16 +1222,16 @@ void FAnimNode_KawaiiPhysics::AdjustByPhysicsAssetCollision(const USkeletalMeshC
 	else if (Bone.PhysicsBodySetup != nullptr)
 	{
 		check(Bone.BoneRef.BoneIndex != INDEX_NONE);
-		float SphereShapeScale = SkeletalMeshComp->GetBoneTransform(Bone.BoneRef.BoneIndex, FTransform::Identity).GetScale3D().GetAbsMax(); // コンポーネント座標でのTransformのスケール
-		FVector SphereShapeVectorScale(SphereShapeScale);
+		float ShapeScale = SkeletalMeshComp->GetBoneTransform(Bone.BoneRef.BoneIndex, FTransform::Identity).GetScale3D().GetAbsMax(); // コンポーネント座標でのTransformのスケール
+		FVector ShapeVectorScale(ShapeScale);
 
-		FTransform SphereShapeBoneTM = FTransform(Bone.Rotation, Bone.Location);
+		FTransform ShapeBoneTM = FTransform(Bone.Rotation, Bone.Location);
 
-		FKAggregateGeom* SphereShapeAggGeom = &Bone.PhysicsBodySetup->AggGeom;
+		FKAggregateGeom* ShapeAggGeom = &Bone.PhysicsBodySetup->AggGeom;
 
-		for (int32 i = 0; i <SphereShapeAggGeom->SphereElems.Num(); ++i)
+		for (int32 i = 0; i <ShapeAggGeom->SphereElems.Num(); ++i)
 		{
-			const FKSphereElem& SphereShape = SphereShapeAggGeom->SphereElems[i];
+			const FKSphereElem& SphereShape = ShapeAggGeom->SphereElems[i];
 
 			// FAnimNode_KawaiiPhysics::AdjustBySphereCollision()のESphericalLimitType::Outerのケースを参考にしている
 			if (SphereShape.Radius <= 0.0f)
@@ -1240,8 +1240,8 @@ void FAnimNode_KawaiiPhysics::AdjustByPhysicsAssetCollision(const USkeletalMeshC
 			}
 
 			FTransform SphereShapeElemTM = SphereShape.GetTransform();
-			SphereShapeElemTM.ScaleTranslation(SphereShapeVectorScale);
-			SphereShapeElemTM *= SphereShapeBoneTM;
+			SphereShapeElemTM.ScaleTranslation(ShapeVectorScale);
+			SphereShapeElemTM *= ShapeBoneTM;
 
 			FVector SphereShapeLocation = SphereShapeElemTM.GetLocation();
 
@@ -1358,17 +1358,17 @@ void FAnimNode_KawaiiPhysics::AdjustByPhysicsAssetCollision(const USkeletalMeshC
 			break;
 		}
 
-		for (int32 i = 0; i <SphereShapeAggGeom->BoxElems.Num(); ++i)
+		for (int32 i = 0; i <ShapeAggGeom->BoxElems.Num(); ++i)
 		{
-			FTransform SphereShapeElemTM = SphereShapeAggGeom->BoxElems[i].GetTransform();
-			SphereShapeElemTM.ScaleTranslation(SphereShapeVectorScale);
-			SphereShapeElemTM *= SphereShapeBoneTM;
+			FTransform SphereShapeElemTM = ShapeAggGeom->BoxElems[i].GetTransform();
+			SphereShapeElemTM.ScaleTranslation(ShapeVectorScale);
+			SphereShapeElemTM *= ShapeBoneTM;
 			// TODO:
 		}
 
-		for (int32 i = 0; i <SphereShapeAggGeom->SphylElems.Num(); ++i)
+		for (int32 i = 0; i <ShapeAggGeom->SphylElems.Num(); ++i)
 		{
-			const FKSphylElem& Capsule = SphereShapeAggGeom->SphylElems[i];
+			const FKSphylElem& Capsule = ShapeAggGeom->SphylElems[i];
 
 			if (Capsule.Radius <= 0 || Capsule.Length <= 0)
 			{
@@ -1376,24 +1376,24 @@ void FAnimNode_KawaiiPhysics::AdjustByPhysicsAssetCollision(const USkeletalMeshC
 			}
 
 			FTransform SphereShapeElemTM = Capsule.GetTransform();
-			SphereShapeElemTM.ScaleTranslation(SphereShapeVectorScale);
-			SphereShapeElemTM *= SphereShapeBoneTM;
+			SphereShapeElemTM.ScaleTranslation(ShapeVectorScale);
+			SphereShapeElemTM *= ShapeBoneTM;
 			// TODO:
 		}
 
-		for (int32 i = 0; i <SphereShapeAggGeom->ConvexElems.Num(); ++i)
+		for (int32 i = 0; i <ShapeAggGeom->ConvexElems.Num(); ++i)
 		{
-			FTransform SphereShapeElemTM = SphereShapeAggGeom->ConvexElems[i].GetTransform();
-			SphereShapeElemTM.ScaleTranslation(SphereShapeVectorScale);
-			SphereShapeElemTM *= SphereShapeBoneTM;
+			FTransform SphereShapeElemTM = ShapeAggGeom->ConvexElems[i].GetTransform();
+			SphereShapeElemTM.ScaleTranslation(ShapeVectorScale);
+			SphereShapeElemTM *= ShapeBoneTM;
 			// TODO:
 		}
 
-		for (int32 i = 0; i <SphereShapeAggGeom->TaperedCapsuleElems.Num(); ++i)
+		for (int32 i = 0; i <ShapeAggGeom->TaperedCapsuleElems.Num(); ++i)
 		{
-			FTransform SphereShapeElemTM = SphereShapeAggGeom->TaperedCapsuleElems[i].GetTransform();
-			SphereShapeElemTM.ScaleTranslation(SphereShapeVectorScale);
-			SphereShapeElemTM *= SphereShapeBoneTM;
+			FTransform SphereShapeElemTM = ShapeAggGeom->TaperedCapsuleElems[i].GetTransform();
+			SphereShapeElemTM.ScaleTranslation(ShapeVectorScale);
+			SphereShapeElemTM *= ShapeBoneTM;
 			// TODO:
 		}
 	}
