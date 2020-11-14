@@ -825,7 +825,7 @@ void FAnimNode_KawaiiPhysics::AdjustBySphereCollision(const USkeletalMeshCompone
 				{
 					float LimitDistance = Capsule.Radius + Sphere.Radius;
 					float DistSquared = FMath::PointDistToSegmentSquared(Sphere.Location, StartPoint, EndPoint);
-					if (DistSquared < LimitDistance* LimitDistance)
+					if (DistSquared < LimitDistance * LimitDistance)
 					{
 						FVector ClosestPoint = FMath::ClosestPointOnSegment(Sphere.Location, StartPoint, EndPoint);
 						PushOutVector = (ClosestPoint - Sphere.Location).GetSafeNormal() * LimitDistance - (ClosestPoint - Sphere.Location);
@@ -904,7 +904,7 @@ void FAnimNode_KawaiiPhysics::AdjustByCapsuleCollision(const USkeletalMeshCompon
 			float DistSquared = FMath::PointDistToSegmentSquared(Bone.Location, StartPoint, EndPoint);
 
 			float LimitDistance = Bone.PhysicsSettings.Radius + Capsule.Radius;
-			if (DistSquared < LimitDistance* LimitDistance)
+			if (DistSquared < LimitDistance * LimitDistance)
 			{
 				FVector ClosestPoint = FMath::ClosestPointOnSegment(Bone.Location, StartPoint, EndPoint);
 				Bone.Location = ClosestPoint + (Bone.Location - ClosestPoint).GetSafeNormal() * LimitDistance;
@@ -951,7 +951,7 @@ void FAnimNode_KawaiiPhysics::AdjustByCapsuleCollision(const USkeletalMeshCompon
 				float DistSquared = FMath::PointDistToSegmentSquared(SphereShapeLocation, StartPoint, EndPoint);
 
 				float LimitDistance = SphereShape.Radius + Capsule.Radius;
-				if (DistSquared < LimitDistance* LimitDistance)
+				if (DistSquared < LimitDistance * LimitDistance)
 				{
 					FVector ClosestPoint = FMath::ClosestPointOnSegment(SphereShapeLocation, StartPoint, EndPoint);
 					PushOutVector = ClosestPoint + (SphereShapeLocation - ClosestPoint).GetSafeNormal() * LimitDistance - SphereShapeLocation;
@@ -974,19 +974,64 @@ void FAnimNode_KawaiiPhysics::AdjustByCapsuleCollision(const USkeletalMeshCompon
 			// TODO:
 		}
 
-		for (int32 i = 0; i <AggGeom->SphylElems.Num(); ++i)
-		{
-			const FKSphylElem& Capsule = AggGeom->SphylElems[i];
+		// Capsuleの場合はParentBoneがもつカプセルのコリジョン判定によってParentBoneとBoneの位置を押し出す
+		float ParentShapeScale = SkeletalMeshComp->GetBoneTransform(ParentBone.BoneRef.BoneIndex, FTransform::Identity).GetScale3D().GetAbsMax(); // コンポーネント座標でのTransformのスケール
+		FVector ParentShapeVectorScale(ParentShapeScale);
+		FTransform ParentShapeBoneTM = FTransform(ParentBone.Rotation, ParentBone.Location);
+		FKAggregateGeom* ParentShapeAggGeom = &ParentBone.PhysicsBodySetup->AggGeom;
 
-			if (Capsule.Radius <= 0 || Capsule.Length <= 0)
+		for (int32 i = 0; i <ParentShapeAggGeom->SphylElems.Num(); ++i)
+		{
+			const FKSphylElem& CapsuleShape = ParentShapeAggGeom->SphylElems[i];
+
+			if (CapsuleShape.Radius <= 0 || CapsuleShape.Length <= 0)
 			{
 				continue;
 			}
 
-			FTransform ElemTM = Capsule.GetTransform();
-			ElemTM.ScaleTranslation(VectorScale);
-			ElemTM *= BoneTM;
-			// TODO:
+			FTransform ElemTM = CapsuleShape.GetTransform();
+			ElemTM.ScaleTranslation(ParentShapeVectorScale);
+			ElemTM *= ParentShapeBoneTM;
+
+			FVector CapsuleShapeLocation = ElemTM.GetLocation();
+
+			for (auto& Capsule : Limits)
+			{
+				if (Capsule.Radius <= 0 || Capsule.Length <= 0)
+				{
+					continue;
+				}
+
+				FVector PushOutVector = FVector::ZeroVector;
+
+				FVector CapsuleShapeStartPoint = CapsuleShapeLocation + ElemTM.GetRotation().GetAxisZ() * CapsuleShape.Length * 0.5f;
+				FVector CapsuleShapeEndPoint = CapsuleShapeLocation + ElemTM.GetRotation().GetAxisZ() * CapsuleShape.Length * -0.5f;
+
+				FVector CapsuleStartPoint = Capsule.Location + Capsule.Rotation.GetAxisZ() * Capsule.Length * 0.5f;
+				FVector CapsuleEndPoint = Capsule.Location + Capsule.Rotation.GetAxisZ() * Capsule.Length * -0.5f;
+
+				FVector CapsuleShapeClosestPoint;
+				FVector CapsuleClosestPoint;
+				FMath::SegmentDistToSegmentSafe(CapsuleShapeStartPoint, CapsuleShapeEndPoint, CapsuleStartPoint, CapsuleEndPoint, CapsuleShapeClosestPoint, CapsuleClosestPoint);
+				float DistSquared = (CapsuleShapeClosestPoint - CapsuleClosestPoint).SizeSquared();
+
+				float LimitDistance = CapsuleShape.Radius + Capsule.Radius;
+				if (DistSquared < LimitDistance * LimitDistance)
+				{
+					PushOutVector = CapsuleClosestPoint + (CapsuleShapeClosestPoint - CapsuleClosestPoint).GetSafeNormal() * LimitDistance - CapsuleShapeClosestPoint;
+				}
+
+				CapsuleShapeLocation += PushOutVector;
+				// CapsuleShapeが押し出されたベクトルだけボーンも移動させるという単純な計算
+				if (ParentBone.ParentIndex >= 0)
+				{
+					ParentBone.Location += PushOutVector;
+				}
+				Bone.Location += PushOutVector;
+			}
+
+			// シェイプが骨に複数くっついている場合、すべてを満足する押し出し位置は1イテレーションでは計算できないので、ひとつ押し出しを計算したらそこで打ち切る
+			break;
 		}
 
 		for (int32 i = 0; i <AggGeom->ConvexElems.Num(); ++i)
@@ -1195,7 +1240,7 @@ void FAnimNode_KawaiiPhysics::AdjustByPhysicsAssetCollision(const USkeletalMeshC
 					float DistSquared = FMath::PointDistToSegmentSquared(Bone.Location, StartPoint, EndPoint);
 
 					float LimitDistance = Bone.PhysicsSettings.Radius + Capsule.Radius;
-					if (DistSquared < LimitDistance* LimitDistance)
+					if (DistSquared < LimitDistance * LimitDistance)
 					{
 						FVector ClosestPoint = FMath::ClosestPointOnSegment(Bone.Location, StartPoint, EndPoint);
 						Bone.Location = ClosestPoint + (Bone.Location - ClosestPoint).GetSafeNormal() * LimitDistance;
@@ -1328,7 +1373,7 @@ void FAnimNode_KawaiiPhysics::AdjustByPhysicsAssetCollision(const USkeletalMeshC
 						float DistSquared = FMath::PointDistToSegmentSquared(SphereShapeLocation, StartPoint, EndPoint);
 
 						float LimitDistance = SphereShape.Radius + Capsule.Radius;
-						if (DistSquared < LimitDistance* LimitDistance)
+						if (DistSquared < LimitDistance * LimitDistance)
 						{
 							FVector ClosestPoint = FMath::ClosestPointOnSegment(SphereShapeLocation, StartPoint, EndPoint);
 							PushOutVector = ClosestPoint + (SphereShapeLocation - ClosestPoint).GetSafeNormal() * LimitDistance - SphereShapeLocation;
@@ -1431,7 +1476,7 @@ void FAnimNode_KawaiiPhysics::AdjustByPhysicsAssetCollision(const USkeletalMeshC
 
 						float LimitDistance = CapsuleShape.Radius + Sphere.Radius;
 						float DistSquared = FMath::PointDistToSegmentSquared(SphereLocation, StartPoint, EndPoint);
-						if (DistSquared < LimitDistance* LimitDistance)
+						if (DistSquared < LimitDistance * LimitDistance)
 						{
 							FVector ClosestPoint = FMath::ClosestPointOnSegment(SphereLocation, StartPoint, EndPoint);
 							PushOutVector = (ClosestPoint - SphereLocation).GetSafeNormal() * LimitDistance - (ClosestPoint - SphereLocation);
