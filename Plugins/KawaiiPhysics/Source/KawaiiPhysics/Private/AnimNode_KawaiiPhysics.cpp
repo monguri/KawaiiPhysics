@@ -789,8 +789,9 @@ void FAnimNode_KawaiiPhysics::AdjustBySphereCollision(const USkeletalMeshCompone
 		}
 
 		// Capsuleの場合はParentBoneがもつカプセルのコリジョン判定によってParentBoneとBoneの位置を押し出す
+		float ParentScale = SkeletalMeshComp->GetBoneTransform(ParentBone.BoneRef.BoneIndex, FTransform::Identity).GetScale3D().GetAbsMax(); // コンポーネント座標でのTransformのスケール
+		FVector ParentVectorScale(ParentScale);
 		FTransform ParentBoneTM = FTransform(ParentBone.Rotation, ParentBone.Location);
-
 		FKAggregateGeom* ParentAggGeom = &ParentBone.PhysicsBodySetup->AggGeom;
 
 		for (int32 i = 0; i <ParentAggGeom->SphylElems.Num(); ++i)
@@ -803,7 +804,7 @@ void FAnimNode_KawaiiPhysics::AdjustBySphereCollision(const USkeletalMeshCompone
 			}
 
 			FTransform ElemTM = Capsule.GetTransform();
-			ElemTM.ScaleTranslation(VectorScale);
+			ElemTM.ScaleTranslation(ParentVectorScale);
 			ElemTM *= ParentBoneTM;
 
 			FVector CapsuleShapeLocation = ElemTM.GetLocation();
@@ -1255,6 +1256,8 @@ void FAnimNode_KawaiiPhysics::AdjustByPhysicsAssetCollision(const USkeletalMeshC
 
 				if (BoneIndex != INDEX_NONE)
 				{
+					// コリジョンがついてるボーンがシミュレーション対象で押し出しでボーンが動いてコリジョンが動くといたちごっこになるので
+					// このフレームでの押し出しはコリジョンの位置に反映させない
 					FTransform BoneTM = SkeletalMeshComp->GetBoneTransform(BoneIndex, FTransform::Identity); // コンポーネント座標でのTransform
 					float Scale = BoneTM.GetScale3D().GetAbsMax();
 					FVector VectorScale(Scale);
@@ -1275,19 +1278,19 @@ void FAnimNode_KawaiiPhysics::AdjustByPhysicsAssetCollision(const USkeletalMeshC
 						FTransform ElemTM = Sphere.GetTransform();
 						ElemTM.ScaleTranslation(VectorScale);
 						ElemTM *= BoneTM;
-						const FVector& Location = ElemTM.GetLocation();
+						const FVector& SphereLocation = ElemTM.GetLocation();
 
 						FVector PushOutVector = FVector::ZeroVector;
 
 						float LimitDistance = SphereShape.Radius + Sphere.Radius;
-						if ((SphereShapeLocation - Location).SizeSquared() > LimitDistance * LimitDistance)
+						if ((SphereShapeLocation - SphereLocation).SizeSquared() > LimitDistance * LimitDistance)
 						{
 							continue;
 						}
 						else
 						{
-							PushOutVector = (LimitDistance - (SphereShapeLocation - Location).Size())
-								* (SphereShapeLocation - Location).GetSafeNormal();
+							PushOutVector = (LimitDistance - (SphereShapeLocation - SphereLocation).Size())
+								* (SphereShapeLocation - SphereLocation).GetSafeNormal();
 						}
 
 						SphereShapeLocation += PushOutVector;
@@ -1366,19 +1369,126 @@ void FAnimNode_KawaiiPhysics::AdjustByPhysicsAssetCollision(const USkeletalMeshC
 			// TODO:
 		}
 
-		for (int32 i = 0; i <ShapeAggGeom->SphylElems.Num(); ++i)
-		{
-			const FKSphylElem& Capsule = ShapeAggGeom->SphylElems[i];
+		// Capsuleの場合はParentBoneがもつカプセルのコリジョン判定によってParentBoneとBoneの位置を押し出す
+		float ParentShapeScale = SkeletalMeshComp->GetBoneTransform(ParentBone.BoneRef.BoneIndex, FTransform::Identity).GetScale3D().GetAbsMax(); // コンポーネント座標でのTransformのスケール
+		FVector ParentShapeVectorScale(ParentShapeScale);
+		FTransform ParentShapeBoneTM = FTransform(ParentBone.Rotation, ParentBone.Location);
+		FKAggregateGeom* ParentShapeAggGeom = &ParentBone.PhysicsBodySetup->AggGeom;
 
-			if (Capsule.Radius <= 0 || Capsule.Length <= 0)
+		for (int32 i = 0; i <ParentShapeAggGeom->SphylElems.Num(); ++i)
+		{
+			const FKSphylElem& CapsuleShape = ParentShapeAggGeom->SphylElems[i];
+
+			if (CapsuleShape.Radius <= 0 || CapsuleShape.Length <= 0)
 			{
 				continue;
 			}
 
-			FTransform SphereShapeElemTM = Capsule.GetTransform();
-			SphereShapeElemTM.ScaleTranslation(ShapeVectorScale);
-			SphereShapeElemTM *= ShapeBoneTM;
-			// TODO:
+			FTransform CapsuleShapeElemTM = CapsuleShape.GetTransform();
+			CapsuleShapeElemTM.ScaleTranslation(ParentShapeVectorScale);
+			CapsuleShapeElemTM *= ParentShapeBoneTM;
+
+			FVector CapsuleShapeLocation = CapsuleShapeElemTM.GetLocation();
+
+			for (int32 j = 0; j <UsePhysicsAssetAsLimits->SkeletalBodySetups.Num(); ++j)
+			{
+				if (!ensure(UsePhysicsAssetAsLimits->SkeletalBodySetups[j]))
+				{
+					continue;
+				}
+				int32 BoneIndex = SkeletalMeshComp->GetBoneIndex(UsePhysicsAssetAsLimits->SkeletalBodySetups[j]->BoneName);
+
+				if (BoneIndex != INDEX_NONE)
+				{
+					// コリジョンがついてるボーンがシミュレーション対象で押し出しでボーンが動いてコリジョンが動くといたちごっこになるので
+					// このフレームでの押し出しはコリジョンの位置に反映させない
+					FTransform BoneTM = SkeletalMeshComp->GetBoneTransform(BoneIndex, FTransform::Identity); // コンポーネント座標でのTransform
+					float Scale = SkeletalMeshComp->GetBoneTransform(BoneIndex, FTransform::Identity).GetScale3D().GetAbsMax();
+					FVector VectorScale(Scale);
+					BoneTM.RemoveScaling();
+
+					FKAggregateGeom* AggGeom = &UsePhysicsAssetAsLimits->SkeletalBodySetups[j]->AggGeom;
+
+					for (int32 k = 0; k <AggGeom->SphereElems.Num(); ++k)
+					{
+						const FKSphereElem& Sphere = AggGeom->SphereElems[k];
+
+						// FAnimNode_KawaiiPhysics::AdjustBySphereCollision()のESphericalLimitType::Outerのケースを参考にしている
+						if (Sphere.Radius <= 0.0f)
+						{
+							continue;
+						}
+
+						FTransform ElemTM = Sphere.GetTransform();
+						ElemTM.ScaleTranslation(VectorScale);
+						ElemTM *= BoneTM;
+						const FVector& SphereLocation = ElemTM.GetLocation();
+
+						FVector PushOutVector = FVector::ZeroVector;
+
+						FVector StartPoint = CapsuleShapeLocation + ElemTM.GetRotation().GetAxisZ() * CapsuleShape.Length * 0.5f;
+						FVector EndPoint = CapsuleShapeLocation + ElemTM.GetRotation().GetAxisZ() * CapsuleShape.Length * -0.5f;
+
+						float LimitDistance = CapsuleShape.Radius + Sphere.Radius;
+						float DistSquared = FMath::PointDistToSegmentSquared(SphereLocation, StartPoint, EndPoint);
+						if (DistSquared < LimitDistance* LimitDistance)
+						{
+							FVector ClosestPoint = FMath::ClosestPointOnSegment(SphereLocation, StartPoint, EndPoint);
+							PushOutVector = (ClosestPoint - SphereLocation).GetSafeNormal() * LimitDistance - (ClosestPoint - SphereLocation);
+						}
+
+						CapsuleShapeLocation += PushOutVector;
+						// CapsuleShapeが押し出されたベクトルだけボーンも移動させるという単純な計算
+						if (ParentBone.ParentIndex >= 0)
+						{
+							ParentBone.Location += PushOutVector;
+						}
+						Bone.Location += PushOutVector;
+					}
+
+					for (int32 k = 0; k <AggGeom->BoxElems.Num(); ++k)
+					{
+						FTransform ElemTM = AggGeom->BoxElems[k].GetTransform();
+						ElemTM.ScaleTranslation(VectorScale);
+						ElemTM *= BoneTM;
+						// TODO:
+					}
+
+					for (int32 k = 0; k <AggGeom->SphylElems.Num(); ++k)
+					{
+						const FKSphylElem& Capsule = AggGeom->SphylElems[k];
+
+						if (Capsule.Radius <= 0 || Capsule.Length <= 0)
+						{
+							continue;
+						}
+
+						FTransform ElemTM = Capsule.GetTransform();
+						ElemTM.ScaleTranslation(VectorScale);
+						ElemTM *= BoneTM;
+						// TODO:
+					}
+
+					for (int32 k = 0; k <AggGeom->ConvexElems.Num(); ++k)
+					{
+						FTransform ElemTM = AggGeom->ConvexElems[k].GetTransform();
+						ElemTM.ScaleTranslation(VectorScale);
+						ElemTM *= BoneTM;
+						// TODO:
+					}
+
+					for (int32 k = 0; k <AggGeom->TaperedCapsuleElems.Num(); ++k)
+					{
+						FTransform ElemTM = AggGeom->TaperedCapsuleElems[k].GetTransform();
+						ElemTM.ScaleTranslation(VectorScale);
+						ElemTM *= BoneTM;
+						// TODO:
+					}
+				}
+			}
+
+			// シェイプが骨に複数くっついている場合、すべてを満足する押し出し位置は1イテレーションでは計算できないので、ひとつ押し出しを計算したらそこで打ち切る
+			break;
 		}
 
 		for (int32 i = 0; i <ShapeAggGeom->ConvexElems.Num(); ++i)
