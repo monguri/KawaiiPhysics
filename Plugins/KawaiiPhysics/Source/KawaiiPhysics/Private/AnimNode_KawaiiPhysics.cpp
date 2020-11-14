@@ -819,20 +819,41 @@ void FAnimNode_KawaiiPhysics::AdjustBySphereCollision(const USkeletalMeshCompone
 
 				FVector StartPoint = CapsuleShapeLocation + ElemTM.GetRotation().GetAxisZ() * Capsule.Length * 0.5f;
 				FVector EndPoint = CapsuleShapeLocation + ElemTM.GetRotation().GetAxisZ() * Capsule.Length * -0.5f;
-				float DistSquared = FMath::PointDistToSegmentSquared(Sphere.Location, StartPoint, EndPoint);
 
-				float LimitDistance = Capsule.Radius + Sphere.Radius;
 				if (Sphere.LimitType == ESphericalLimitType::Outer)
 				{
+					float LimitDistance = Capsule.Radius + Sphere.Radius;
+					float DistSquared = FMath::PointDistToSegmentSquared(Sphere.Location, StartPoint, EndPoint);
 					if (DistSquared < LimitDistance* LimitDistance)
 					{
 						FVector ClosestPoint = FMath::ClosestPointOnSegment(Sphere.Location, StartPoint, EndPoint);
 						PushOutVector = (ClosestPoint - Sphere.Location).GetSafeNormal() * LimitDistance - (ClosestPoint - Sphere.Location);
 					}
 				}
-				else
+				else // Inner
 				{
-					//TODO: 現状Outerしか対応しない
+					float LimitDistance = Sphere.Radius - Capsule.Radius;
+					// 以下の押し出し処理だと、Start側の半球がスフィア内に入ってもスフィアのRotation次第でEnd側の半球がスフィアから飛び出すことは考えうるが
+					// Rotationまで変えないので、そうなっても放置する
+					if (Sphere.Radius * 2.0f > Capsule.Radius * 2.0f + Capsule.Length) // この条件はカプセルがスフィアに入る必要条件。入らない場合は押し出ししない
+					{
+						float StartPointDistSquared = (StartPoint - Sphere.Location).SizeSquared();
+						float EndPointDistSquared = (EndPoint - Sphere.Location).SizeSquared();
+						if (StartPointDistSquared >= EndPointDistSquared)
+						{
+							if (StartPointDistSquared > Sphere.Radius - Capsule.Radius)
+							{
+								PushOutVector = ((StartPoint - Sphere.Location).GetSafeNormal() * LimitDistance + Sphere.Location) - StartPoint;
+							}
+						}
+						else
+						{
+							if (EndPointDistSquared > Sphere.Radius - Capsule.Radius)
+							{
+								PushOutVector = ((EndPoint - Sphere.Location).GetSafeNormal() * LimitDistance + Sphere.Location) - EndPoint;
+							}
+						}
+					}
 				}
 
 				CapsuleShapeLocation += PushOutVector;
