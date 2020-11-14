@@ -415,10 +415,10 @@ private:
 	void UpdatePlanerLimits(TArray<FPlanarLimit>& Limits, FComponentSpacePoseContext& Output, const FBoneContainer& BoneContainer, FTransform& ComponentTransform);
 
 	void SimulateModifyBones(FComponentSpacePoseContext& Output, const FBoneContainer& BoneContainer, FTransform& ComponentTransform);
-	void AdjustBySphereCollision(const USkeletalMeshComponent* SkelMeshComp, FKawaiiPhysicsModifyBone& Bone, TArray<FSphericalLimit>& Limits);
-	void AdjustByCapsuleCollision(const USkeletalMeshComponent* SkelMeshComp, FKawaiiPhysicsModifyBone& Bone, TArray<FCapsuleLimit>& Limits);
-	void AdjustByPlanerCollision(const USkeletalMeshComponent* SkelMeshComp, FKawaiiPhysicsModifyBone& Bone, TArray<FPlanarLimit>& Limits);
-	void AdjustByPhysicsAssetCollision(const USkeletalMeshComponent* SkelMeshComp, FKawaiiPhysicsModifyBone& Bone);
+	void AdjustBySphereCollision(const USkeletalMeshComponent* SkelMeshComp, FKawaiiPhysicsModifyBone& ParentBone, FKawaiiPhysicsModifyBone& Bone, TArray<FSphericalLimit>& Limits);
+	void AdjustByCapsuleCollision(const USkeletalMeshComponent* SkelMeshComp, FKawaiiPhysicsModifyBone& ParentBone, FKawaiiPhysicsModifyBone& Bone, TArray<FCapsuleLimit>& Limits);
+	void AdjustByPlanerCollision(const USkeletalMeshComponent* SkelMeshComp, FKawaiiPhysicsModifyBone& ParentBone, FKawaiiPhysicsModifyBone& Bone, TArray<FPlanarLimit>& Limits);
+	void AdjustByPhysicsAssetCollision(const USkeletalMeshComponent* SkelMeshComp, FKawaiiPhysicsModifyBone& ParentBone, FKawaiiPhysicsModifyBone& Bone);
 	void AdjustByAngleLimit(FComponentSpacePoseContext& Output, const FBoneContainer& BoneContainer, FTransform& ComponentTransform, FKawaiiPhysicsModifyBone& Bone, FKawaiiPhysicsModifyBone& ParentBone);
 	void AdjustByPlanarConstraint(FKawaiiPhysicsModifyBone& Bone, FKawaiiPhysicsModifyBone& ParentBone);
 	

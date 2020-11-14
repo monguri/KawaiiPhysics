@@ -638,13 +638,13 @@ void FAnimNode_KawaiiPhysics::SimulateModifyBones(FComponentSpacePoseContext& Ou
 			SCOPE_CYCLE_COUNTER(STAT_KawaiiPhysics_AdjustBone);
 
 			// Adjust by each collisions
-			AdjustBySphereCollision(SkelComp, Bone, SphericalLimits);
-			AdjustBySphereCollision(SkelComp, Bone, SphericalLimitsData);
-			AdjustByCapsuleCollision(SkelComp, Bone, CapsuleLimits);
-			AdjustByCapsuleCollision(SkelComp, Bone, CapsuleLimitsData);
-			AdjustByPlanerCollision(SkelComp, Bone, PlanarLimits);
-			AdjustByPlanerCollision(SkelComp, Bone, PlanarLimitsData);
-			AdjustByPhysicsAssetCollision(SkelComp, Bone);
+			AdjustBySphereCollision(SkelComp, ParentBone, Bone, SphericalLimits);
+			AdjustBySphereCollision(SkelComp, ParentBone, Bone, SphericalLimitsData);
+			AdjustByCapsuleCollision(SkelComp, ParentBone, Bone, CapsuleLimits);
+			AdjustByCapsuleCollision(SkelComp, ParentBone, Bone, CapsuleLimitsData);
+			AdjustByPlanerCollision(SkelComp, ParentBone, Bone, PlanarLimits);
+			AdjustByPlanerCollision(SkelComp, ParentBone, Bone, PlanarLimitsData);
+			AdjustByPhysicsAssetCollision(SkelComp, ParentBone, Bone);
 
 			// Adjust by angle limit
 			AdjustByAngleLimit(Output, BoneContainer, ComponentTransform, Bone, ParentBone);
@@ -660,7 +660,7 @@ void FAnimNode_KawaiiPhysics::SimulateModifyBones(FComponentSpacePoseContext& Ou
 	DeltaTimeOld = DeltaTime;
 }
 
-void FAnimNode_KawaiiPhysics::AdjustBySphereCollision(const USkeletalMeshComponent* SkeletalMeshComp, FKawaiiPhysicsModifyBone& Bone, TArray<FSphericalLimit>& Limits)
+void FAnimNode_KawaiiPhysics::AdjustBySphereCollision(const USkeletalMeshComponent* SkeletalMeshComp, FKawaiiPhysicsModifyBone& ParentBone, FKawaiiPhysicsModifyBone& Bone, TArray<FSphericalLimit>& Limits)
 {
 	if (!bUsePhysicsAssetAsShapes)
 	{
@@ -819,7 +819,7 @@ void FAnimNode_KawaiiPhysics::AdjustBySphereCollision(const USkeletalMeshCompone
 	}
 }
 
-void FAnimNode_KawaiiPhysics::AdjustByCapsuleCollision(const USkeletalMeshComponent* SkeletalMeshComp, FKawaiiPhysicsModifyBone& Bone, TArray<FCapsuleLimit>& Limits)
+void FAnimNode_KawaiiPhysics::AdjustByCapsuleCollision(const USkeletalMeshComponent* SkeletalMeshComp, FKawaiiPhysicsModifyBone& ParentBone, FKawaiiPhysicsModifyBone& Bone, TArray<FCapsuleLimit>& Limits)
 {
 	if (!bUsePhysicsAssetAsShapes)
 	{
@@ -936,7 +936,7 @@ void FAnimNode_KawaiiPhysics::AdjustByCapsuleCollision(const USkeletalMeshCompon
 	}
 }
 
-void FAnimNode_KawaiiPhysics::AdjustByPlanerCollision(const USkeletalMeshComponent* SkeletalMeshComp, FKawaiiPhysicsModifyBone& Bone, TArray<FPlanarLimit>& Limits)
+void FAnimNode_KawaiiPhysics::AdjustByPlanerCollision(const USkeletalMeshComponent* SkeletalMeshComp, FKawaiiPhysicsModifyBone& ParentBone, FKawaiiPhysicsModifyBone& Bone, TArray<FPlanarLimit>& Limits)
 {
 	if (!bUsePhysicsAssetAsShapes)
 	{
@@ -1042,7 +1042,7 @@ void FAnimNode_KawaiiPhysics::AdjustByPlanerCollision(const USkeletalMeshCompone
 	}
 }
 
-void FAnimNode_KawaiiPhysics::AdjustByPhysicsAssetCollision(const USkeletalMeshComponent* SkeletalMeshComp, FKawaiiPhysicsModifyBone& Bone)
+void FAnimNode_KawaiiPhysics::AdjustByPhysicsAssetCollision(const USkeletalMeshComponent* SkeletalMeshComp, FKawaiiPhysicsModifyBone& ParentBone, FKawaiiPhysicsModifyBone& Bone)
 {
 	if (!bUsePhysicsAssetAsLimits || UsePhysicsAssetAsLimits == nullptr)
 	{
