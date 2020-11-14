@@ -773,9 +773,11 @@ void FAnimNode_KawaiiPhysics::AdjustBySphereCollision(const USkeletalMeshCompone
 
 				SphereShapeLocation += PushOutVector;
 				// SphereShapeが押し出されたベクトルだけボーンも移動させるという単純な計算
-				// TODO:SphereShapeが骨に対してひとつだけならまだいいが、複数になってくると問題も大きい
 				Bone.Location += PushOutVector;
 			}
+
+			// シェイプが骨に複数くっついている場合、すべてを満足する押し出し位置は1イテレーションでは計算できないので、ひとつ押し出しを計算したらそこで打ち切る
+			break;
 		}
 
 		for (int32 i = 0; i <AggGeom->BoxElems.Num(); ++i)
@@ -835,13 +837,15 @@ void FAnimNode_KawaiiPhysics::AdjustBySphereCollision(const USkeletalMeshCompone
 
 				CapsuleShapeLocation += PushOutVector;
 				// CapsuleShapeが押し出されたベクトルだけボーンも移動させるという単純な計算
-				// TODO:CapsuleShapeが骨に対してひとつだけならまだいいが、複数になってくると問題も大きい
 				if (ParentBone.ParentIndex >= 0)
 				{
 					ParentBone.Location += PushOutVector;
 				}
 				Bone.Location += PushOutVector;
 			}
+
+			// シェイプが骨に複数くっついている場合、すべてを満足する押し出し位置は1イテレーションでは計算できないので、ひとつ押し出しを計算したらそこで打ち切る
+			break;
 		}
 
 		for (int32 i = 0; i <AggGeom->ConvexElems.Num(); ++i)
@@ -933,9 +937,11 @@ void FAnimNode_KawaiiPhysics::AdjustByCapsuleCollision(const USkeletalMeshCompon
 
 				SphereShapeLocation += PushOutVector;
 				// SphereShapeが押し出されたベクトルだけボーンも移動させるという単純な計算
-				// TODO:SphereShapeが骨に対してひとつだけならまだいいが、複数になってくると問題も大きい
 				Bone.Location += PushOutVector;
 			}
+
+			// シェイプが骨に複数くっついている場合、すべてを満足する押し出し位置は1イテレーションでは計算できないので、ひとつ押し出しを計算したらそこで打ち切る
+			break;
 		}
 
 		for (int32 i = 0; i <AggGeom->BoxElems.Num(); ++i)
@@ -1039,9 +1045,11 @@ void FAnimNode_KawaiiPhysics::AdjustByPlanerCollision(const USkeletalMeshCompone
 
 				SphereShapeLocation += PushOutVector;
 				// SphereShapeが押し出されたベクトルだけボーンも移動させるという単純な計算
-				// TODO:SphereShapeが骨に対してひとつだけならまだいいが、複数になってくると問題も大きい
 				Bone.Location += PushOutVector;
 			}
+
+			// シェイプが骨に複数くっついている場合、すべてを満足する押し出し位置は1イテレーションでは計算できないので、ひとつ押し出しを計算したらそこで打ち切る
+			break;
 		}
 
 		for (int32 i = 0; i <AggGeom->BoxElems.Num(); ++i)
@@ -1304,7 +1312,6 @@ void FAnimNode_KawaiiPhysics::AdjustByPhysicsAssetCollision(const USkeletalMeshC
 
 						SphereShapeLocation += PushOutVector;
 						// SphereShapeが押し出されたベクトルだけボーンも移動させるという単純な計算
-						// TODO:SphereShapeが骨に対してひとつだけならまだいいが、複数になってくると問題も大きい
 						Bone.Location += PushOutVector;
 					}
 
@@ -1325,6 +1332,9 @@ void FAnimNode_KawaiiPhysics::AdjustByPhysicsAssetCollision(const USkeletalMeshC
 					}
 				}
 			}
+
+			// シェイプが骨に複数くっついている場合、すべてを満足する押し出し位置は1イテレーションでは計算できないので、ひとつ押し出しを計算したらそこで打ち切る
+			break;
 		}
 
 		for (int32 i = 0; i <SphereShapeAggGeom->BoxElems.Num(); ++i)
