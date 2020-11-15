@@ -1071,7 +1071,6 @@ void FAnimNode_KawaiiPhysics::AdjustByPlanerCollision(const USkeletalMeshCompone
 		for (auto& Planar : Limits)
 		{
 			FVector PointOnPlane = FVector::PointPlaneProject(Bone.Location, Planar.Plane);
-#if 1
 			float DistSquared = (Bone.Location - PointOnPlane).SizeSquared();
 
 			FVector IntersectionPoint;
@@ -1081,14 +1080,6 @@ void FAnimNode_KawaiiPhysics::AdjustByPlanerCollision(const USkeletalMeshCompone
 				Bone.Location = PointOnPlane + Planar.Rotation.GetUpVector() * Bone.PhysicsSettings.Radius;
 				continue;
 			}
-#else
-			float DotProduct = FVector::DotProduct(Bone.Location - PointOnPlane, Planar.Rotation.GetUpVector());
-			if (DotProduct < Bone.PhysicsSettings.Radius)
-			{
-				Bone.Location = PointOnPlane + Planar.Rotation.GetUpVector() * Bone.PhysicsSettings.Radius;
-				continue;
-			}
-#endif
 		}
 	}
 	else
