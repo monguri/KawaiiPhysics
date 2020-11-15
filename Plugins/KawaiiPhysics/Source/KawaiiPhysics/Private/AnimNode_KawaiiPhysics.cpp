@@ -1071,6 +1071,7 @@ void FAnimNode_KawaiiPhysics::AdjustByPlanerCollision(const USkeletalMeshCompone
 		for (auto& Planar : Limits)
 		{
 			FVector PointOnPlane = FVector::PointPlaneProject(Bone.Location, Planar.Plane);
+#if 1
 			float DistSquared = (Bone.Location - PointOnPlane).SizeSquared();
 
 			FVector IntersectionPoint;
@@ -1080,6 +1081,14 @@ void FAnimNode_KawaiiPhysics::AdjustByPlanerCollision(const USkeletalMeshCompone
 				Bone.Location = PointOnPlane + Planar.Rotation.GetUpVector() * Bone.PhysicsSettings.Radius;
 				continue;
 			}
+#else
+			float DotProduct = FVector::DotProduct(Bone.Location - PointOnPlane, Planar.Rotation.GetUpVector());
+			if (DotProduct < Bone.PhysicsSettings.Radius)
+			{
+				Bone.Location = PointOnPlane + Planar.Rotation.GetUpVector() * Bone.PhysicsSettings.Radius;
+				continue;
+			}
+#endif
 		}
 	}
 	else
@@ -1207,7 +1216,10 @@ void FAnimNode_KawaiiPhysics::AdjustByPlanerCollision(const USkeletalMeshCompone
 					}
 
 					CapsuleShapeLocation += PushOutVector;
+
 					// CapsuleShapeが押し出されたベクトルだけボーンも移動させるという単純な計算
+					// TODO:PlanarLimitの場合はこのような平行移動の押し出しはかなり不自然で、本来はRotationを含めた押し出しにしないとチェーンと地面のPlaneのケースなどは
+					// 地面にチェーンが沿わない事態になる
 					if (ParentBone.ParentIndex >= 0)
 					{
 						ParentBone.Location += PushOutVector;
