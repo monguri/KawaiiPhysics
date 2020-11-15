@@ -1141,21 +1141,6 @@ void FAnimNode_KawaiiPhysics::AdjustByPlanerCollision(const USkeletalMeshCompone
 				// TODO:
 			}
 
-			for (int32 i = 0; i <AggGeom->SphylElems.Num(); ++i)
-			{
-				const FKSphylElem& Capsule = AggGeom->SphylElems[i];
-
-				if (Capsule.Radius <= 0 || Capsule.Length <= 0)
-				{
-					continue;
-				}
-
-				FTransform ElemTM = Capsule.GetTransform();
-				ElemTM.ScaleTranslation(VectorScale);
-				ElemTM *= BoneTM;
-				// TODO:
-			}
-
 			for (int32 i = 0; i <AggGeom->ConvexElems.Num(); ++i)
 			{
 				FTransform ElemTM = AggGeom->ConvexElems[i].GetTransform();
@@ -1170,6 +1155,68 @@ void FAnimNode_KawaiiPhysics::AdjustByPlanerCollision(const USkeletalMeshCompone
 				ElemTM.ScaleTranslation(VectorScale);
 				ElemTM *= BoneTM;
 				// TODO:
+			}
+		}
+
+		if (ParentBone.PhysicsBodySetup != nullptr)
+		{
+			// Capsuleの場合はParentBoneがもつカプセルのコリジョン判定によってParentBoneとBoneの位置を押し出す
+			float ParentShapeScale = SkeletalMeshComp->GetBoneTransform(ParentBone.BoneRef.BoneIndex, FTransform::Identity).GetScale3D().GetAbsMax(); // コンポーネント座標でのTransformのスケール
+			FVector ParentShapeVectorScale(ParentShapeScale);
+			FTransform ParentShapeBoneTM = FTransform(ParentBone.Rotation, ParentBone.Location);
+			FKAggregateGeom* ParentShapeAggGeom = &ParentBone.PhysicsBodySetup->AggGeom;
+
+			for (int32 i = 0; i <ParentShapeAggGeom->SphylElems.Num(); ++i)
+			{
+				const FKSphylElem& CapsuleShape = ParentShapeAggGeom->SphylElems[i];
+
+				if (CapsuleShape.Radius <= 0 || CapsuleShape.Length <= 0)
+				{
+					continue;
+				}
+
+				FTransform ElemTM = CapsuleShape.GetTransform();
+				ElemTM.ScaleTranslation(ParentShapeVectorScale);
+				ElemTM *= ParentShapeBoneTM;
+
+				FVector CapsuleShapeLocation = ElemTM.GetLocation();
+
+				for (auto& Planar : Limits)
+				{
+					FVector PushOutVector = FVector::ZeroVector;
+
+					FVector CapsuleShapeStartPoint = CapsuleShapeLocation + ElemTM.GetRotation().GetAxisZ() * CapsuleShape.Length * 0.5f;
+					FVector CapsuleShapeEndPoint = CapsuleShapeLocation + ElemTM.GetRotation().GetAxisZ() * CapsuleShape.Length * -0.5f;
+
+					FVector StartPointOnPlane = FVector::PointPlaneProject(CapsuleShapeStartPoint, Planar.Plane);
+					FVector EndPointOnPlane = FVector::PointPlaneProject(CapsuleShapeEndPoint, Planar.Plane);
+
+					// スフィアのときと違って速度は考慮せず問答無用に押し出す。StartとEndでより潜っている方を押し出す。
+					float StartDotProduct = FVector::DotProduct(CapsuleShapeStartPoint - StartPointOnPlane, Planar.Rotation.GetUpVector());
+					float EndDotProduct = FVector::DotProduct(CapsuleShapeEndPoint - EndPointOnPlane, Planar.Rotation.GetUpVector());
+					if (StartDotProduct < CapsuleShape.Radius || EndDotProduct < CapsuleShape.Radius)
+					{
+						if (StartDotProduct < EndDotProduct)
+						{
+							PushOutVector = StartPointOnPlane + (StartPointOnPlane - CapsuleShapeStartPoint).GetSafeNormal() * CapsuleShape.Radius - CapsuleShapeStartPoint;
+						}
+						else
+						{
+							PushOutVector = EndPointOnPlane + (EndPointOnPlane - CapsuleShapeEndPoint).GetSafeNormal() * CapsuleShape.Radius - CapsuleShapeEndPoint;
+						}
+					}
+
+					CapsuleShapeLocation += PushOutVector;
+					// CapsuleShapeが押し出されたベクトルだけボーンも移動させるという単純な計算
+					if (ParentBone.ParentIndex >= 0)
+					{
+						ParentBone.Location += PushOutVector;
+					}
+					Bone.Location += PushOutVector;
+				}
+
+				// シェイプが骨に複数くっついている場合、すべてを満足する押し出し位置は1イテレーションでは計算できないので、ひとつ押し出しを計算したらそこで打ち切る
+				break;
 			}
 		}
 	}
