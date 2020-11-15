@@ -1183,7 +1183,8 @@ void FAnimNode_KawaiiPhysics::AdjustByPlanerCollision(const USkeletalMeshCompone
 
 				for (auto& Planar : Limits)
 				{
-					FVector PushOutVector = FVector::ZeroVector;
+					FVector StartPushOutVector = FVector::ZeroVector;
+					FVector EndPushOutVector = FVector::ZeroVector;
 
 					FVector CapsuleShapeStartPoint = CapsuleShapeLocation + ElemTM.GetRotation().GetAxisZ() * CapsuleShape.Length * 0.5f;
 					FVector CapsuleShapeEndPoint = CapsuleShapeLocation + ElemTM.GetRotation().GetAxisZ() * CapsuleShape.Length * -0.5f;
@@ -1194,28 +1195,30 @@ void FAnimNode_KawaiiPhysics::AdjustByPlanerCollision(const USkeletalMeshCompone
 					// スフィアのときと違って速度は考慮せず問答無用に押し出す。StartとEndでより潜っている方を押し出す。
 					float StartDotProduct = FVector::DotProduct(CapsuleShapeStartPoint - StartPointOnPlane, Planar.Rotation.GetUpVector());
 					float EndDotProduct = FVector::DotProduct(CapsuleShapeEndPoint - EndPointOnPlane, Planar.Rotation.GetUpVector());
-					if (StartDotProduct < CapsuleShape.Radius || EndDotProduct < CapsuleShape.Radius)
+					if (StartDotProduct < CapsuleShape.Radius)
 					{
-						if (StartDotProduct < EndDotProduct)
-						{
-							PushOutVector = StartPointOnPlane + (StartPointOnPlane - CapsuleShapeStartPoint).GetSafeNormal() * CapsuleShape.Radius - CapsuleShapeStartPoint;
-						}
-						else
-						{
-							PushOutVector = EndPointOnPlane + (EndPointOnPlane - CapsuleShapeEndPoint).GetSafeNormal() * CapsuleShape.Radius - CapsuleShapeEndPoint;
-						}
+						StartPushOutVector = StartPointOnPlane + (StartPointOnPlane - CapsuleShapeStartPoint).GetSafeNormal() * CapsuleShape.Radius - CapsuleShapeStartPoint;
 					}
 
-					CapsuleShapeLocation += PushOutVector;
+					if (EndDotProduct < CapsuleShape.Radius)
+					{
+						EndPushOutVector = EndPointOnPlane + (EndPointOnPlane - CapsuleShapeEndPoint).GetSafeNormal() * CapsuleShape.Radius - CapsuleShapeEndPoint;
+					}
 
-					// CapsuleShapeが押し出されたベクトルだけボーンも移動させるという単純な計算
-					// TODO:PlanarLimitの場合はこのような平行移動の押し出しはかなり不自然で、本来はRotationを含めた押し出しにしないとチェーンと地面のPlaneのケースなどは
-					// 地面にチェーンが沿わない事態になる
+					CapsuleShapeLocation += (StartPushOutVector + EndPushOutVector) * 0.5f;
+
 					if (ParentBone.ParentIndex >= 0)
 					{
-						ParentBone.Location += PushOutVector;
+						ParentBone.Location += StartPushOutVector;
 					}
-					Bone.Location += PushOutVector;
+					Bone.Location += EndPushOutVector;
+
+					// CapsuleのStartとEndで押し出す距離が違うので、カプセルがPlaneに垂直だと2つのLocationも同じになりボーンの長さ補正で問題になるので適当に
+					// Planeの平面方向にずらしておく
+					if ((ParentBone.Location - Bone.Location).SizeSquared() < KINDA_SMALL_NUMBER)
+					{
+						Bone.Location += Planar.Rotation.GetRightVector() * EndPushOutVector.Size() * 0.2f; // EndPushOutVector.Size() * 0.2fは適当な長さ設定
+					}
 				}
 
 				// シェイプが骨に複数くっついている場合、すべてを満足する押し出し位置は1イテレーションでは計算できないので、ひとつ押し出しを計算したらそこで打ち切る
