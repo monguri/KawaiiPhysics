@@ -155,6 +155,8 @@ struct KAWAIIPHYSICS_API FKawaiiPhysicsSettings
 	float WorldDampingRotation = 0.8f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0"), category = "KawaiiPhysics")
 	float Stiffness = 0.05f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"), category = "KawaiiPhysics")
+	float DelayAlpha = 0.5f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0"), category = "KawaiiPhysics")
 	float Radius = 3.0f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (PinHiddenByDefault, ClampMin = "0"), category = "KawaiiPhysics")
@@ -224,6 +226,9 @@ struct KAWAIIPHYSICS_API FAnimNode_KawaiiPhysics : public FAnimNode_SkeletalCont
 	GENERATED_USTRUCT_BODY()
 
 public:
+	UPROPERTY(EditAnywhere, Category = Mode)
+	bool bUseDelayMode = false;
+
 	UPROPERTY(EditAnywhere, Category = ModifyTarget)
 	FBoneReference RootBone;
 	UPROPERTY(EditAnywhere, Category = ModifyTarget)

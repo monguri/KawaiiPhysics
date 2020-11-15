@@ -565,51 +565,75 @@ void FAnimNode_KawaiiPhysics::SimulateModifyBones(FComponentSpacePoseContext& Ou
 		FVector BonePoseLocation = Bone.PoseLocation;
 		FVector ParentBonePoseLocation = ParentBone.PoseLocation;
 
-		// Move using Velocity( = movement amount in pre frame ) and Damping
+		if (bUseDelayMode)
 		{
-			FVector Velocity = (Bone.Location - Bone.PrevLocation) / DeltaTimeOld;
 			Bone.PrevLocation = Bone.Location;
-			Velocity *= (1.0f - Bone.PhysicsSettings.Damping);
 
-			// wind
-			if (bEnableWind && Scene)
+			FVector BoneNotDelayedLocation;
+			if (ParentBone.ParentIndex < 0)
 			{
-				SCOPE_CYCLE_COUNTER(STAT_KawaiiPhysics_Wind);
-
-				Scene->GetWindParameters_GameThread(ComponentTransform.TransformPosition(Bone.PoseLocation), WindDirection, WindSpeed, WindMinGust, WindMaxGust);
-				WindDirection = ComponentTransform.Inverse().TransformVector(WindDirection);
-				FVector WindVelocity = WindDirection * WindSpeed * WindScale;
-
-				// TODO:Migrate if there are more good method (Currently copying AnimDynamics implementation)
-				WindVelocity *= FMath::FRandRange(0.0f, 2.0f);
-
-				Velocity += WindVelocity * TargetFramerate;
+				// Parentがルートのときは入力位置をDelayのガイドとする:w
+				BoneNotDelayedLocation = Bone.PoseLocation;
 			}
-			Bone.Location += Velocity * DeltaTime;
-		}
+			else
+			{
+				// ParentがルートでないときはGrandParentとParentを結んだ方向にローカルなRotationを加えた位置をDelayのガイドとする
+				//const FQuat& BoneLocalPoseRotation = ParentBone.PoseRotation.Inverse() * Bone.PoseRotation;
+				auto& GrandParentBone = ModifyBones[ParentBone.ParentIndex];
+				const FQuat& BoneLocalPoseRotation = FQuat::FindBetweenVectors(ParentBone.PoseLocation - GrandParentBone.PoseLocation, Bone.PoseLocation - ParentBone.PoseLocation);
+				BoneNotDelayedLocation = ParentBone.Location + BoneLocalPoseRotation * (ParentBone.Location - GrandParentBone.Location).GetSafeNormal() * (Bone.PoseLocation - ParentBone.PoseLocation).Size();
+			}
 
-		// Follow Translation
-        Bone.Location += SkelCompMoveVector * (1.0f - Bone.PhysicsSettings.WorldDampingLocation);
-
-		// Follow Rotation
-		Bone.Location += (SkelCompMoveRotation.RotateVector(Bone.PrevLocation) - Bone.PrevLocation)
-			* (1.0f - Bone.PhysicsSettings.WorldDampingRotation);
-
-		// Gravity
-		// TODO:Migrate if there are more good method (Currently copying AnimDynamics implementation)
-		if (CVarEnableOldPhysicsMethodGrayity.GetValueOnAnyThread() == 0)
-		{
-			Bone.Location += 0.5 * GravityCS * DeltaTime * DeltaTime;
+			Bone.Location = FMath::Lerp(Bone.PrevLocation, BoneNotDelayedLocation, Bone.PhysicsSettings.DelayAlpha);
 		}
 		else
 		{
-			Bone.Location += GravityCS * DeltaTime;
+			// Move using Velocity( = movement amount in pre frame ) and Damping
+			{
+				FVector Velocity = (Bone.Location - Bone.PrevLocation) / DeltaTimeOld;
+				Bone.PrevLocation = Bone.Location;
+				Velocity *= (1.0f - Bone.PhysicsSettings.Damping);
+
+				// wind
+				if (bEnableWind && Scene)
+				{
+					SCOPE_CYCLE_COUNTER(STAT_KawaiiPhysics_Wind);
+
+					Scene->GetWindParameters_GameThread(ComponentTransform.TransformPosition(Bone.PoseLocation), WindDirection, WindSpeed, WindMinGust, WindMaxGust);
+					WindDirection = ComponentTransform.Inverse().TransformVector(WindDirection);
+					FVector WindVelocity = WindDirection * WindSpeed * WindScale;
+
+					// TODO:Migrate if there are more good method (Currently copying AnimDynamics implementation)
+					WindVelocity *= FMath::FRandRange(0.0f, 2.0f);
+
+					Velocity += WindVelocity * TargetFramerate;
+				}
+				Bone.Location += Velocity * DeltaTime;
+			}
+
+			// Follow Translation
+			Bone.Location += SkelCompMoveVector * (1.0f - Bone.PhysicsSettings.WorldDampingLocation);
+
+			// Follow Rotation
+			Bone.Location += (SkelCompMoveRotation.RotateVector(Bone.PrevLocation) - Bone.PrevLocation)
+				* (1.0f - Bone.PhysicsSettings.WorldDampingRotation);
+
+			// Gravity
+			// TODO:Migrate if there are more good method (Currently copying AnimDynamics implementation)
+			if (CVarEnableOldPhysicsMethodGrayity.GetValueOnAnyThread() == 0)
+			{
+				Bone.Location += 0.5 * GravityCS * DeltaTime * DeltaTime;
+			}
+			else
+			{
+				Bone.Location += GravityCS * DeltaTime;
+			}
+			
+			// Pull to Pose Location
+			FVector BaseLocation = ParentBone.Location + (BonePoseLocation - ParentBonePoseLocation);
+			Bone.Location += (BaseLocation - Bone.Location) *
+				(1.0f - FMath::Pow(1.0f - Bone.PhysicsSettings.Stiffness, Exponent));
 		}
-		
-		// Pull to Pose Location
-		FVector BaseLocation = ParentBone.Location + (BonePoseLocation - ParentBonePoseLocation);
-		Bone.Location += (BaseLocation - Bone.Location) *
-			(1.0f - FMath::Pow(1.0f - Bone.PhysicsSettings.Stiffness, Exponent));
 
 		// Calculate Rotation before adjusting collision
 		ParentBone.Rotation = ParentBone.PoseRotation;
